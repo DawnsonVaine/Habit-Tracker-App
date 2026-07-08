@@ -1,8 +1,9 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,12 @@ import { HABIT_COLORS, HABIT_EMOJIS, WEEKDAY_SHORT } from '../../constants/habit
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { Frequency, NewHabitInput } from '../../types/habit';
-import { cancelHabitReminder, scheduleHabitReminder } from '../../utils/notifications';
+import {
+  cancelHabitReminder,
+  ensureNotificationPermission,
+  getNotificationPermissionStatus,
+  scheduleHabitReminder,
+} from '../../utils/notifications';
 
 type FrequencyKind = 'daily' | 'weekdays' | 'timesPerWeek';
 
@@ -56,6 +62,36 @@ export default function NewHabitScreen() {
     return date;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
+
+  useEffect(() => {
+    if (!reminderEnabled) return;
+    getNotificationPermissionStatus().then((granted) => setPermissionBlocked(!granted));
+  }, [reminderEnabled]);
+
+  async function handleReminderToggle(value: boolean) {
+    if (!value) {
+      setReminderEnabled(false);
+      return;
+    }
+
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      setPermissionBlocked(true);
+      Alert.alert(
+        'Notifications disabled',
+        'Enable notifications in Settings to receive habit reminders.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    setPermissionBlocked(false);
+    setReminderEnabled(true);
+  }
 
   function toggleDay(day: number) {
     setSelectedDays((prev) =>
@@ -158,8 +194,10 @@ export default function NewHabitScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
-      <Text style={[styles.label, { color: colors.subtext }]}>NAME</Text>
+    <>
+      <Stack.Screen options={{ title: isEditing ? (existing?.name ?? 'Edit Habit') : 'New Habit' }} />
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+        <Text style={[styles.label, { color: colors.subtext }]}>NAME</Text>
       <TextInput
         value={name}
         onChangeText={setName}
@@ -261,8 +299,16 @@ export default function NewHabitScreen() {
 
       <View style={[styles.reminderRow, { borderColor: colors.border }]}>
         <Text style={[styles.label, { color: colors.subtext, marginTop: 0 }]}>REMINDER</Text>
-        <Switch value={reminderEnabled} onValueChange={setReminderEnabled} />
+        <Switch value={reminderEnabled} onValueChange={handleReminderToggle} />
       </View>
+
+      {reminderEnabled && permissionBlocked && (
+        <Pressable onPress={() => Linking.openSettings()} style={styles.permissionWarning}>
+          <Text style={{ color: colors.danger, fontSize: 13 }}>
+            Notifications are disabled, so this reminder won't fire. Tap to open Settings.
+          </Text>
+        </Pressable>
+      )}
 
       {reminderEnabled && (
         <Pressable
@@ -304,7 +350,8 @@ export default function NewHabitScreen() {
           <Text style={{ color: colors.danger, fontWeight: '600' }}>Delete Habit</Text>
         </Pressable>
       )}
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
@@ -370,6 +417,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 10,
+  },
+  permissionWarning: {
+    marginTop: 8,
   },
   saveButton: {
     marginTop: 32,

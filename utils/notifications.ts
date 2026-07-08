@@ -18,6 +18,12 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   return status === 'granted';
 }
 
+/** Checks current permission status without prompting the user. */
+export async function getNotificationPermissionStatus(): Promise<boolean> {
+  const { status } = await Notifications.getPermissionsAsync();
+  return status === 'granted';
+}
+
 /** Cancels an existing reminder (if any) and schedules a new daily reminder at HH:mm. */
 export async function scheduleHabitReminder(habit: Pick<Habit, 'id' | 'name' | 'emoji'>, time: string, existingNotificationId: string | null): Promise<string | null> {
   if (existingNotificationId) {
