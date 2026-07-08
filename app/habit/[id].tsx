@@ -1,10 +1,11 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MonthGrid } from '../../components/MonthGrid';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
-import { MONTH_LABELS } from '../../utils/dates';
+import { MONTH_LABELS, parseDateStr } from '../../utils/dates';
 import { getCompletionRate, getStreaks } from '../../utils/streaks';
 
 const EMPTY_COMPLETIONS: string[] = [];
@@ -34,6 +35,29 @@ export default function HabitDetailScreen() {
 
   const { current, longest } = getStreaks(habit, completions);
   const completionRate = getCompletionRate(habit, completions, 30);
+
+  function handleToggleDay(dateStr: string) {
+    if (!habit) return;
+    const habitId = habit.id;
+    const isCompleted = completedSet.has(dateStr);
+    const d = parseDateStr(dateStr);
+    const label = `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}`;
+
+    Alert.alert(
+      isCompleted ? 'Unmark day' : 'Mark day complete',
+      isCompleted ? `Remove completion for ${label}?` : `Mark ${label} as completed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isCompleted ? 'Unmark' : 'Mark',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            toggleCompletion(habitId, dateStr);
+          },
+        },
+      ]
+    );
+  }
 
   function changeMonth(delta: number) {
     let newMonth = month + delta;
@@ -104,7 +128,7 @@ export default function HabitDetailScreen() {
           completedDates={completedSet}
           color={habit.color}
           createdAt={habit.createdAt}
-          onToggleDay={(dateStr) => toggleCompletion(habit.id, dateStr)}
+          onToggleDay={handleToggleDay}
         />
       </ScrollView>
     </>

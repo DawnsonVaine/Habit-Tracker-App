@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { HabitCard } from '../../components/HabitCard';
@@ -25,6 +26,11 @@ export default function TodayScreen() {
 
   const activeHabits = useMemo(() => habits.filter((h) => !h.archived), [habits]);
   const dueHabits = activeHabits.filter((h) => isDueOnDate(h, today));
+
+  function handleToggle(habitId: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleCompletion(habitId, today);
+  }
 
   function moveHabit(index: number, direction: -1 | 1) {
     const swapWith = index + direction;
@@ -126,7 +132,7 @@ export default function TodayScreen() {
                 habit={item}
                 completed={habitCompletions.includes(today)}
                 streak={current}
-                onToggle={() => toggleCompletion(item.id, today)}
+                onToggle={() => handleToggle(item.id)}
               />
             );
           }}
