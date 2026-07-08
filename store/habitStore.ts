@@ -14,6 +14,7 @@ interface HabitState {
   toggleCompletion: (habitId: string, dateStr?: string) => void;
   isCompletedOn: (habitId: string, dateStr: string) => boolean;
   setNotificationId: (habitId: string, notificationId: string | null) => void;
+  setArchived: (id: string, archived: boolean) => void;
   reorderHabits: (orderedIds: string[]) => void;
   replaceAllData: (habits: Habit[], completions: CompletionsMap) => void;
   clearAllData: () => void;
@@ -78,6 +79,12 @@ export const useHabitStore = create<HabitState>()(
       setNotificationId: (habitId, notificationId) => {
         set((state) => ({
           habits: state.habits.map((h) => (h.id === habitId ? { ...h, notificationId } : h)),
+        }));
+      },
+
+      setArchived: (id, archived) => {
+        set((state) => ({
+          habits: state.habits.map((h) => (h.id === id ? { ...h, archived } : h)),
         }));
       },
 

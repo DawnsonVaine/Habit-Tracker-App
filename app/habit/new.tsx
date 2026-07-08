@@ -30,6 +30,7 @@ export default function NewHabitScreen() {
   const updateHabit = useHabitStore((s) => s.updateHabit);
   const deleteHabit = useHabitStore((s) => s.deleteHabit);
   const setNotificationId = useHabitStore((s) => s.setNotificationId);
+  const setArchived = useHabitStore((s) => s.setArchived);
 
   const existing = useMemo(() => habits.find((h) => h.id === id), [habits, id]);
 
@@ -115,6 +116,28 @@ export default function NewHabitScreen() {
       }
     }
 
+    router.back();
+  }
+
+  async function handleArchiveToggle() {
+    if (!existing) return;
+    const nextArchived = !existing.archived;
+
+    if (nextArchived) {
+      if (existing.notificationId) {
+        await cancelHabitReminder(existing.notificationId);
+        setNotificationId(existing.id, null);
+      }
+    } else if (existing.reminderTime) {
+      const notifId = await scheduleHabitReminder(
+        { id: existing.id, name: existing.name, emoji: existing.emoji },
+        existing.reminderTime,
+        null
+      );
+      setNotificationId(existing.id, notifId);
+    }
+
+    setArchived(existing.id, nextArchived);
     router.back();
   }
 
@@ -269,6 +292,14 @@ export default function NewHabitScreen() {
       </Pressable>
 
       {isEditing && (
+        <Pressable style={[styles.archiveButton, { borderColor: colors.border }]} onPress={handleArchiveToggle}>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>
+            {existing?.archived ? 'Unarchive Habit' : 'Archive Habit'}
+          </Text>
+        </Pressable>
+      )}
+
+      {isEditing && (
         <Pressable style={[styles.deleteButton, { borderColor: colors.danger }]} onPress={handleDelete}>
           <Text style={{ color: colors.danger, fontWeight: '600' }}>Delete Habit</Text>
         </Pressable>
@@ -347,8 +378,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  deleteButton: {
+  archiveButton: {
     marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  deleteButton: {
+    marginTop: 12,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',

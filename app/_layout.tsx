@@ -23,6 +23,7 @@ export default function RootLayout() {
           name="habit/new"
           options={{ title: 'New Habit', presentation: 'modal' }}
         />
+        <Stack.Screen name="archive" options={{ title: 'Archived Habits' }} />
       </Stack>
     </GestureHandlerRootView>
   );

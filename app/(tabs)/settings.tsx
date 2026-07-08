@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
@@ -29,12 +30,15 @@ function SettingsRow({
 }
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const replaceAllData = useHabitStore((s) => s.replaceAllData);
   const clearAllData = useHabitStore((s) => s.clearAllData);
   const [busy, setBusy] = useState(false);
+
+  const archivedHabits = useMemo(() => habits.filter((h) => h.archived), [habits]);
 
   async function handleExport() {
     try {
@@ -105,6 +109,17 @@ export default function SettingsScreen() {
           title="Restore Backup"
           subtitle="Load habits & history from a JSON file"
           onPress={handleImport}
+          isLast
+          colors={colors}
+        />
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>HABITS</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow
+          title="Archived Habits"
+          subtitle={archivedHabits.length > 0 ? `${archivedHabits.length} archived` : 'No archived habits'}
+          onPress={() => router.push('/archive')}
           isLast
           colors={colors}
         />
