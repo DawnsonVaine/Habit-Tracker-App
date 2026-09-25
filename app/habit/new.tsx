@@ -322,7 +322,11 @@ export default function NewHabitScreen() {
           onChangeText={setUnit}
           placeholder="Unit (e.g. glasses, pages)"
           placeholderTextColor={colors.subtext}
-          style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+          style={[
+            styles.input,
+            styles.goalUnitInput,
+            { backgroundColor: colors.card, color: colors.text, borderColor: colors.border },
+          ]}
         />
       )}
 
@@ -448,7 +452,7 @@ export default function NewHabitScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 20, paddingBottom: 60 },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: 20, marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: 28, marginBottom: 10 },
   input: {
     borderWidth: 1,
     borderRadius: 12,
@@ -475,7 +479,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  weekdayRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  weekdayRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
   weekdayPill: {
     width: 36,
     height: 36,
@@ -484,7 +488,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 12 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 16 },
   stepperButton: {
     width: 40,
     height: 40,
@@ -506,18 +510,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 14,
   },
   permissionWarning: {
-    marginTop: 8,
+    marginTop: 12,
   },
   goalFields: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
+    gap: 12,
+    marginTop: 16,
   },
   goalField: { flex: 1 },
-  goalFieldLabel: { fontSize: 12, marginBottom: 4 },
+  goalFieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 7 },
+  goalUnitInput: { marginTop: 12 },
   saveButton: {
     marginTop: 32,
     paddingVertical: 16,

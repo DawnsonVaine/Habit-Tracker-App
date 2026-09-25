@@ -22,6 +22,7 @@ interface DraggableHabitCardProps {
   value: number;
   onToggle: () => void;
   onAddStep: () => void;
+  onSubtractStep: () => void;
   onReset: () => void;
 }
 
@@ -65,9 +66,9 @@ export default function TodayScreen() {
     toggleCompletion(habitId, today);
   }
 
-  function handleAddStep(habit: Habit) {
+  function handleStep(habit: Habit, direction: 1 | -1) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    addProgress(habit.id, habit.step, today);
+    addProgress(habit.id, habit.step * direction, today);
   }
 
   function handleReset(habitId: string) {
@@ -131,7 +132,8 @@ export default function TodayScreen() {
                 streak={current}
                 value={value}
                 onToggle={() => handleToggle(item.id)}
-                onAddStep={() => handleAddStep(item)}
+                onAddStep={() => handleStep(item, 1)}
+                onSubtractStep={() => handleStep(item, -1)}
                 onReset={() => handleReset(item.id)}
               />
             );

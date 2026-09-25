@@ -13,6 +13,8 @@ interface Props {
   onToggle: () => void;
   /** Adds one step toward a count/duration target. */
   onAddStep: () => void;
+  /** Takes one step back off a count/duration total. */
+  onSubtractStep: () => void;
   /** Clears the day's logged value on a count/duration habit. */
   onReset: () => void;
   /** Long-pressing the habit's name area starts a drag-to-reorder gesture. */
@@ -26,6 +28,7 @@ export function HabitCard({
   value,
   onToggle,
   onAddStep,
+  onSubtractStep,
   onReset,
   onLongPress,
 }: Props) {
@@ -66,24 +69,37 @@ export function HabitCard({
           {completed && <Text style={styles.check}>✓</Text>}
         </Pressable>
       ) : (
-        // Tap adds a step; long press clears the day. Reset lives here rather
-        // than on the card body, which is already taken by drag-to-reorder.
-        <Pressable
-          onPress={completed ? onReset : onAddStep}
-          onLongPress={onReset}
-          delayLongPress={400}
-          style={[
-            styles.stepper,
-            {
-              backgroundColor: completed ? habit.color : 'transparent',
-              borderColor: habit.color,
-            },
-          ]}
-        >
-          <Text style={[styles.stepperText, { color: completed ? '#fff' : habit.color }]}>
-            {completed ? '✓' : '+'}
-          </Text>
-        </Pressable>
+        <View style={styles.stepperGroup}>
+          {/* Nothing to take away at zero, so the minus only appears once there is. */}
+          {value > 0 && (
+            <Pressable
+              onPress={onSubtractStep}
+              hitSlop={4}
+              style={[styles.stepButton, { borderColor: habit.color }]}
+            >
+              <Text style={[styles.stepperText, { color: habit.color }]}>−</Text>
+            </Pressable>
+          )}
+          {/* Long press clears the day. Reset lives here rather than on the card
+              body, which is already taken by drag-to-reorder. */}
+          <Pressable
+            onPress={completed ? onReset : onAddStep}
+            onLongPress={onReset}
+            delayLongPress={400}
+            hitSlop={4}
+            style={[
+              styles.stepper,
+              {
+                backgroundColor: completed ? habit.color : 'transparent',
+                borderColor: habit.color,
+              },
+            ]}
+          >
+            <Text style={[styles.stepperText, { color: completed ? '#fff' : habit.color }]}>
+              {completed ? '✓' : '+'}
+            </Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -129,6 +145,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
+  stepperGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 10,
+  },
+  stepButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   stepper: {
     minWidth: 44,
     height: 32,
@@ -137,7 +167,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
   },
   stepperText: {
     fontSize: 17,
