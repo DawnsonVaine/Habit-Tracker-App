@@ -8,15 +8,17 @@ interface Props {
   completed: boolean;
   streak: number;
   onToggle: () => void;
+  /** Long-pressing the habit's name area starts a drag-to-reorder gesture. */
+  onLongPress?: () => void;
 }
 
-export function HabitCard({ habit, completed, streak, onToggle }: Props) {
+export function HabitCard({ habit, completed, streak, onToggle, onLongPress }: Props) {
   const { colors } = useTheme();
 
   return (
     <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Link href={{ pathname: '/habit/[id]', params: { id: habit.id } }} asChild>
-        <Pressable style={styles.info}>
+        <Pressable style={styles.info} onLongPress={onLongPress} delayLongPress={220}>
           <Text style={styles.emoji}>{habit.emoji}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>

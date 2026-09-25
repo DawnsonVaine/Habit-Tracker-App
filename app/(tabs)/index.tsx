@@ -1,12 +1,48 @@
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import ReorderableList, {
+  ReorderableListReorderEvent,
+  reorderItems,
+  useReorderableDrag,
+} from 'react-native-reorderable-list';
 import { HabitCard } from '../../components/HabitCard';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
+import { Habit } from '../../types/habit';
 import { todayStr } from '../../utils/dates';
 import { getStreaks, isDueOnDate } from '../../utils/streaks';
+
+interface DraggableHabitCardProps {
+  habit: Habit;
+  completed: boolean;
+  streak: number;
+  onToggle: () => void;
+}
+
+/**
+ * Wraps HabitCard so a long press starts the reorder drag. The hook that
+ * provides `drag` only works inside an item rendered by ReorderableList.
+ */
+function DraggableHabitCard({ habit, completed, streak, onToggle }: DraggableHabitCardProps) {
+  const drag = useReorderableDrag();
+
+  function handleLongPress() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    drag();
+  }
+
+  return (
+    <HabitCard
+      habit={habit}
+      completed={completed}
+      streak={streak}
+      onToggle={onToggle}
+      onLongPress={handleLongPress}
+    />
+  );
+}
 
 export default function TodayScreen() {
   const router = useRouter();
@@ -16,7 +52,6 @@ export default function TodayScreen() {
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
   const reorderHabits = useHabitStore((s) => s.reorderHabits);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
-  const [reordering, setReordering] = useState(false);
 
   const today = todayStr();
   const todayLabel = useMemo(
@@ -32,12 +67,10 @@ export default function TodayScreen() {
     toggleCompletion(habitId, today);
   }
 
-  function moveHabit(index: number, direction: -1 | 1) {
-    const swapWith = index + direction;
-    if (swapWith < 0 || swapWith >= activeHabits.length) return;
-    const newOrder = activeHabits.map((h) => h.id);
-    [newOrder[index], newOrder[swapWith]] = [newOrder[swapWith], newOrder[index]];
-    reorderHabits(newOrder);
+  // Only today's due habits are on screen, so we hand the store just those ids.
+  // reorderHabits permutes the slots they occupy and leaves every other habit put.
+  function handleReorder({ from, to }: ReorderableListReorderEvent) {
+    reorderHabits(reorderItems(dueHabits, from, to).map((h) => h.id));
   }
 
   if (!hasHydrated) {
@@ -52,13 +85,6 @@ export default function TodayScreen() {
           <Text style={[styles.subtitle, { color: colors.subtext }]}>{todayLabel}</Text>
         </View>
         <View style={styles.headerActions}>
-          {activeHabits.length > 1 && (
-            <Pressable style={styles.reorderButton} onPress={() => setReordering((r) => !r)}>
-              <Text style={[styles.reorderButtonText, { color: colors.accent }]}>
-                {reordering ? 'Done' : 'Reorder'}
-              </Text>
-            </Pressable>
-          )}
           <Pressable
             style={[styles.addButton, { backgroundColor: colors.accent }]}
             onPress={() => router.push('/habit/new')}
@@ -75,60 +101,22 @@ export default function TodayScreen() {
             No habits yet. Tap '+ Habit' to create your first one.
           </Text>
         </View>
-      ) : reordering ? (
-        <FlatList
-          data={activeHabits}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item, index }) => (
-            <View style={[styles.reorderRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={styles.reorderEmoji}>{item.emoji}</Text>
-              <Text style={[styles.reorderName, { color: colors.text }]} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <View style={styles.reorderArrows}>
-                <Pressable
-                  onPress={() => moveHabit(index, -1)}
-                  disabled={index === 0}
-                  hitSlop={6}
-                  style={styles.arrowButton}
-                >
-                  <Text style={[styles.arrowText, { color: index === 0 ? colors.border : colors.accent }]}>▲</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => moveHabit(index, 1)}
-                  disabled={index === activeHabits.length - 1}
-                  hitSlop={6}
-                  style={styles.arrowButton}
-                >
-                  <Text
-                    style={[
-                      styles.arrowText,
-                      { color: index === activeHabits.length - 1 ? colors.border : colors.accent },
-                    ]}
-                  >
-                    ▼
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        />
       ) : dueHabits.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🌱</Text>
           <Text style={[styles.emptyText, { color: colors.subtext }]}>Nothing due today. Enjoy the break!</Text>
         </View>
       ) : (
-        <FlatList
+        <ReorderableList
           data={dueHabits}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          onReorder={handleReorder}
           renderItem={({ item }) => {
             const habitCompletions = completions[item.id] ?? [];
             const { current } = getStreaks(item, habitCompletions);
             return (
-              <HabitCard
+              <DraggableHabitCard
                 habit={item}
                 completed={habitCompletions.includes(today)}
                 streak={current}
@@ -155,8 +143,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { fontSize: 14, marginTop: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  reorderButton: { paddingVertical: 8, paddingHorizontal: 4 },
-  reorderButtonText: { fontSize: 15, fontWeight: '600' },
   addButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -173,19 +159,4 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: { fontSize: 48 },
   emptyText: { fontSize: 15, textAlign: 'center' },
-  reorderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    gap: 12,
-  },
-  reorderEmoji: { fontSize: 24 },
-  reorderName: { flex: 1, fontSize: 16, fontWeight: '600' },
-  reorderArrows: { flexDirection: 'row', gap: 4 },
-  arrowButton: { padding: 8 },
-  arrowText: { fontSize: 16 },
 });
