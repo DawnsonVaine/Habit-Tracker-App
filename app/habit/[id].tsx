@@ -6,9 +6,8 @@ import { MonthGrid } from '../../components/MonthGrid';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { MONTH_LABELS, parseDateStr } from '../../utils/dates';
+import { completedDateSet, EMPTY_PROGRESS, formatTarget } from '../../utils/goals';
 import { getCompletionRate, getStreaks } from '../../utils/streaks';
-
-const EMPTY_COMPLETIONS: string[] = [];
 
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,14 +15,17 @@ export default function HabitDetailScreen() {
   const { colors } = useTheme();
 
   const habit = useHabitStore((s) => s.habits.find((h) => h.id === id));
-  const completions = useHabitStore((s) => s.completions[id ?? ''] ?? EMPTY_COMPLETIONS);
+  const progress = useHabitStore((s) => s.completions[id ?? ''] ?? EMPTY_PROGRESS);
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
 
-  const completedSet = useMemo(() => new Set(completions), [completions]);
+  const completedSet = useMemo(
+    () => (habit ? completedDateSet(habit, progress) : new Set<string>()),
+    [habit, progress]
+  );
 
   if (!habit) {
     return (
@@ -33,8 +35,9 @@ export default function HabitDetailScreen() {
     );
   }
 
-  const { current, longest } = getStreaks(habit, completions);
-  const completionRate = getCompletionRate(habit, completions, 30);
+  const { current, longest } = getStreaks(habit, progress);
+  const completionRate = getCompletionRate(habit, progress, 30);
+  const goalLabel = formatTarget(habit);
 
   function handleToggleDay(dateStr: string) {
     if (!habit) return;
@@ -92,7 +95,12 @@ export default function HabitDetailScreen() {
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
           <Text style={styles.emoji}>{habit.emoji}</Text>
-          <Text style={[styles.name, { color: colors.text }]}>{habit.name}</Text>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.name, { color: colors.text }]}>{habit.name}</Text>
+            {goalLabel !== '' && (
+              <Text style={[styles.goal, { color: colors.subtext }]}>{goalLabel} a day</Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -143,6 +151,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   emoji: { fontSize: 40 },
   name: { fontSize: 24, fontWeight: '700', flexShrink: 1 },
+  goal: { fontSize: 13, marginTop: 2 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
   statCard: {
     flex: 1,

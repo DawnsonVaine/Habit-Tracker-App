@@ -15,7 +15,7 @@ import {
 import { HABIT_COLORS, HABIT_EMOJIS, WEEKDAY_SHORT } from '../../constants/habitOptions';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
-import { Frequency, NewHabitInput } from '../../types/habit';
+import { Frequency, GoalType, NewHabitInput } from '../../types/habit';
 import {
   cancelHabitReminder,
   ensureNotificationPermission,
@@ -50,6 +50,10 @@ export default function NewHabitScreen() {
   const [timesPerWeek, setTimesPerWeek] = useState(
     existing?.frequency.type === 'timesPerWeek' ? existing.frequency.count : 3
   );
+  const [goalType, setGoalType] = useState<GoalType>(existing?.goalType ?? 'binary');
+  const [target, setTarget] = useState(String(existing?.target ?? 1));
+  const [unit, setUnit] = useState(existing?.unit ?? '');
+  const [step, setStep] = useState(String(existing?.step ?? 1));
   const [reminderEnabled, setReminderEnabled] = useState(!!existing?.reminderTime);
   const [reminderTime, setReminderTime] = useState<Date>(() => {
     const date = new Date();
@@ -99,6 +103,21 @@ export default function NewHabitScreen() {
     );
   }
 
+  /** Switching goal type resets the numbers to sensible defaults for that type. */
+  function handleGoalTypeChange(next: GoalType) {
+    setGoalType(next);
+    if (next === 'binary') {
+      setTarget('1');
+      setStep('1');
+    } else if (next === 'duration') {
+      setTarget('30');
+      setStep('5');
+    } else {
+      setTarget('8');
+      setStep('1');
+    }
+  }
+
   async function handleSave() {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -107,6 +126,17 @@ export default function NewHabitScreen() {
     }
     if (frequencyKind === 'weekdays' && selectedDays.length === 0) {
       Alert.alert('Pick at least one day', 'Select which days this habit is due.');
+      return;
+    }
+
+    const targetValue = goalType === 'binary' ? 1 : Math.floor(Number(target));
+    const stepValue = goalType === 'binary' ? 1 : Math.floor(Number(step));
+    if (!Number.isFinite(targetValue) || targetValue < 1) {
+      Alert.alert('Invalid goal', 'The daily target needs to be a whole number of at least 1.');
+      return;
+    }
+    if (!Number.isFinite(stepValue) || stepValue < 1) {
+      Alert.alert('Invalid step', 'The amount added per tap needs to be a whole number of at least 1.');
       return;
     }
 
@@ -124,6 +154,10 @@ export default function NewHabitScreen() {
       emoji,
       color,
       frequency,
+      goalType,
+      target: targetValue,
+      unit: goalType === 'count' && unit.trim() !== '' ? unit.trim() : null,
+      step: stepValue,
       reminderTime: reminderTimeStr,
     };
 
@@ -235,6 +269,62 @@ export default function NewHabitScreen() {
           />
         ))}
       </View>
+
+      <Text style={[styles.label, { color: colors.subtext }]}>GOAL</Text>
+      <View style={styles.segmented}>
+        {(['binary', 'count', 'duration'] as GoalType[]).map((kind) => (
+          <Pressable
+            key={kind}
+            onPress={() => handleGoalTypeChange(kind)}
+            style={[
+              styles.segment,
+              {
+                backgroundColor: goalType === kind ? color : colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={{ color: goalType === kind ? '#fff' : colors.text, fontWeight: '600', fontSize: 13 }}>
+              {kind === 'binary' ? 'Just Done' : kind === 'count' ? 'Count' : 'Duration'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {goalType !== 'binary' && (
+        <View style={styles.goalFields}>
+          <View style={styles.goalField}>
+            <Text style={[styles.goalFieldLabel, { color: colors.subtext }]}>
+              {goalType === 'duration' ? 'Target (minutes)' : 'Daily target'}
+            </Text>
+            <TextInput
+              value={target}
+              onChangeText={setTarget}
+              keyboardType="number-pad"
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+            />
+          </View>
+          <View style={styles.goalField}>
+            <Text style={[styles.goalFieldLabel, { color: colors.subtext }]}>Per tap</Text>
+            <TextInput
+              value={step}
+              onChangeText={setStep}
+              keyboardType="number-pad"
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+            />
+          </View>
+        </View>
+      )}
+
+      {goalType === 'count' && (
+        <TextInput
+          value={unit}
+          onChangeText={setUnit}
+          placeholder="Unit (e.g. glasses, pages)"
+          placeholderTextColor={colors.subtext}
+          style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+        />
+      )}
 
       <Text style={[styles.label, { color: colors.subtext }]}>FREQUENCY</Text>
       <View style={styles.segmented}>
@@ -421,6 +511,13 @@ const styles = StyleSheet.create({
   permissionWarning: {
     marginTop: 8,
   },
+  goalFields: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  goalField: { flex: 1 },
+  goalFieldLabel: { fontSize: 12, marginBottom: 4 },
   saveButton: {
     marginTop: 32,
     paddingVertical: 16,

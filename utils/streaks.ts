@@ -1,5 +1,6 @@
-import { Habit } from '../types/habit';
+import { Habit, HabitProgress } from '../types/habit';
 import { addDays, getWeekdayIndex, parseDateStr, startOfWeek, todayStr } from './dates';
+import { completedDateSet } from './goals';
 
 /** Whether a habit is scheduled to be done on a given date (only meaningful for daily/weekdays types). */
 export function isDueOnDate(habit: Habit, dateStr: string): boolean {
@@ -91,8 +92,8 @@ function timesPerWeekStreak(habit: Habit, completedSet: Set<string>): { current:
   return { current: running, longest: Math.max(longest, running) };
 }
 
-export function getStreaks(habit: Habit, completedDates: string[]): { current: number; longest: number } {
-  const completedSet = new Set(completedDates);
+export function getStreaks(habit: Habit, progress: HabitProgress): { current: number; longest: number } {
+  const completedSet = completedDateSet(habit, progress);
   if (habit.frequency.type === 'timesPerWeek') {
     return timesPerWeekStreak(habit, completedSet);
   }
@@ -100,8 +101,8 @@ export function getStreaks(habit: Habit, completedDates: string[]): { current: n
 }
 
 /** Completion percentage over the last `windowDays` days (or since creation if shorter). */
-export function getCompletionRate(habit: Habit, completedDates: string[], windowDays = 30): number {
-  const completedSet = new Set(completedDates);
+export function getCompletionRate(habit: Habit, progress: HabitProgress, windowDays = 30): number {
+  const completedSet = completedDateSet(habit, progress);
   const today = todayStr();
   const windowStart = addDays(today, -(windowDays - 1));
   const rangeStart = parseDateStr(habit.createdAt) > parseDateStr(windowStart) ? habit.createdAt : windowStart;
@@ -118,14 +119,14 @@ export function getCompletionRate(habit: Habit, completedDates: string[], window
   }
   if (habit.frequency.type === 'timesPerWeek') {
     // Recalculate using weekly targets instead of per-day due count.
-    return getWeeklyCompletionRate(habit, completedDates, windowDays);
+    return getWeeklyCompletionRate(habit, progress, windowDays);
   }
   return due === 0 ? 0 : Math.round((done / due) * 100);
 }
 
-function getWeeklyCompletionRate(habit: Habit, completedDates: string[], windowDays: number): number {
+function getWeeklyCompletionRate(habit: Habit, progress: HabitProgress, windowDays: number): number {
   if (habit.frequency.type !== 'timesPerWeek') return 0;
-  const completedSet = new Set(completedDates);
+  const completedSet = completedDateSet(habit, progress);
   const target = habit.frequency.count;
   const today = todayStr();
   const windowStart = addDays(today, -(windowDays - 1));

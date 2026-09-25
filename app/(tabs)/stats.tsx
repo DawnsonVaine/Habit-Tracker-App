@@ -4,6 +4,7 @@ import { Heatmap, HeatmapDay } from '../../components/Heatmap';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { addDays, parseDateStr, startOfWeek, todayStr } from '../../utils/dates';
+import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
 import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
 
 const HEATMAP_WEEKS = 12;
@@ -18,13 +19,16 @@ export default function StatsScreen() {
 
   const overallRate = useMemo(() => {
     if (habits.length === 0) return 0;
-    const total = habits.reduce((sum, h) => sum + getCompletionRate(h, completions[h.id] ?? [], 30), 0);
+    const total = habits.reduce(
+      (sum, h) => sum + getCompletionRate(h, completions[h.id] ?? EMPTY_PROGRESS, 30),
+      0
+    );
     return Math.round(total / habits.length);
   }, [habits, completions]);
 
   const leaderboard = useMemo(() => {
     return habits
-      .map((h) => ({ habit: h, ...getStreaks(h, completions[h.id] ?? []) }))
+      .map((h) => ({ habit: h, ...getStreaks(h, completions[h.id] ?? EMPTY_PROGRESS) }))
       .sort((a, b) => b.current - a.current);
   }, [habits, completions]);
 
@@ -38,7 +42,7 @@ export default function StatsScreen() {
     while (parseDateStr(cursor) <= parseDateStr(today)) {
       const activeHabits = habits.filter((h) => parseDateStr(h.createdAt) <= parseDateStr(cursor));
       const due = activeHabits.filter((h) => isDueOnDate(h, cursor));
-      const completed = due.filter((h) => (completions[h.id] ?? []).includes(cursor));
+      const completed = due.filter((h) => isDayComplete(h, completions[h.id]?.[cursor]));
       days.push({ date: cursor, ratio: due.length === 0 ? null : completed.length / due.length });
       cursor = addDays(cursor, 1);
     }

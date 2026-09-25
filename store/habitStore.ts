@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { CompletionsMap, Habit, NewHabitInput } from '../types/habit';
+import { CompletionsMap, Habit, HabitProgress, NewHabitInput } from '../types/habit';
 import { todayStr } from '../utils/dates';
 
 interface HabitState {
@@ -12,6 +12,10 @@ interface HabitState {
   updateHabit: (id: string, input: NewHabitInput) => void;
   deleteHabit: (id: string) => void;
   toggleCompletion: (habitId: string, dateStr?: string) => void;
+  /** Adds to a count/duration habit's logged value for a day, capped at its target. */
+  addProgress: (habitId: string, amount: number, dateStr?: string) => void;
+  /** Clears a day's logged value entirely. */
+  resetProgress: (habitId: string, dateStr?: string) => void;
   isCompletedOn: (habitId: string, dateStr: string) => boolean;
   setNotificationId: (habitId: string, notificationId: string | null) => void;
   setArchived: (id: string, archived: boolean) => void;
@@ -22,6 +26,39 @@ interface HabitState {
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+interface PersistedState {
+  habits: Habit[];
+  completions: CompletionsMap;
+}
+
+/** Shape written by app versions before goal types existed. */
+interface LegacyPersistedState {
+  habits?: (Partial<Habit> & { id: string })[];
+  completions?: Record<string, string[] | HabitProgress>;
+}
+
+/** Fills in goal fields on a habit saved before they existed. */
+function migrateHabit(habit: Partial<Habit> & { id: string }): Habit {
+  return {
+    goalType: 'binary',
+    target: 1,
+    unit: null,
+    step: 1,
+    ...habit,
+  } as Habit;
+}
+
+/** Converts date arrays into date -> value maps, leaving already-migrated data alone. */
+function migrateCompletions(completions: Record<string, string[] | HabitProgress>): CompletionsMap {
+  const migrated: CompletionsMap = {};
+  for (const [habitId, entry] of Object.entries(completions)) {
+    migrated[habitId] = Array.isArray(entry)
+      ? Object.fromEntries(entry.map((dateStr) => [dateStr, 1]))
+      : entry;
+  }
+  return migrated;
 }
 
 export const useHabitStore = create<HabitState>()(
@@ -61,19 +98,51 @@ export const useHabitStore = create<HabitState>()(
 
       toggleCompletion: (habitId, dateStr = todayStr()) => {
         set((state) => {
-          const existing = state.completions[habitId] ?? [];
-          const isDone = existing.includes(dateStr);
-          const updated = isDone
-            ? existing.filter((d) => d !== dateStr)
-            : [...existing, dateStr];
+          const habit = state.habits.find((h) => h.id === habitId);
+          if (!habit) return state;
+          const progress = state.completions[habitId] ?? {};
+          const wasComplete = (progress[dateStr] ?? 0) >= habit.target;
+          const { [dateStr]: _cleared, ...withoutDay } = progress;
           return {
-            completions: { ...state.completions, [habitId]: updated },
+            completions: {
+              ...state.completions,
+              // Completing jumps straight to the target so one tap still finishes
+              // a count habit from the calendar; clearing drops the day entirely.
+              [habitId]: wasComplete ? withoutDay : { ...progress, [dateStr]: habit.target },
+            },
           };
         });
       },
 
+      addProgress: (habitId, amount, dateStr = todayStr()) => {
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === habitId);
+          if (!habit) return state;
+          const progress = state.completions[habitId] ?? {};
+          const next = Math.min(habit.target, Math.max(0, (progress[dateStr] ?? 0) + amount));
+          if (next === 0) {
+            const { [dateStr]: _cleared, ...withoutDay } = progress;
+            return { completions: { ...state.completions, [habitId]: withoutDay } };
+          }
+          return {
+            completions: { ...state.completions, [habitId]: { ...progress, [dateStr]: next } },
+          };
+        });
+      },
+
+      resetProgress: (habitId, dateStr = todayStr()) => {
+        set((state) => {
+          const progress = state.completions[habitId] ?? {};
+          const { [dateStr]: _cleared, ...withoutDay } = progress;
+          return { completions: { ...state.completions, [habitId]: withoutDay } };
+        });
+      },
+
       isCompletedOn: (habitId, dateStr) => {
-        return (get().completions[habitId] ?? []).includes(dateStr);
+        const state = get();
+        const habit = state.habits.find((h) => h.id === habitId);
+        if (!habit) return false;
+        return (state.completions[habitId]?.[dateStr] ?? 0) >= habit.target;
       },
 
       setNotificationId: (habitId, notificationId) => {
@@ -119,6 +188,18 @@ export const useHabitStore = create<HabitState>()(
       name: 'habit-tracker-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ habits: state.habits, completions: state.completions }),
+      version: 1,
+      // v0 stored completions as habitId -> ["yyyy-mm-dd", ...] and had no goal
+      // fields. Every existing habit becomes a binary one, and each completed
+      // date becomes a logged value of 1, which is that habit's target.
+      migrate: (persisted, version) => {
+        if (version >= 1) return persisted as PersistedState;
+        const old = (persisted ?? {}) as LegacyPersistedState;
+        return {
+          habits: (old.habits ?? []).map(migrateHabit),
+          completions: migrateCompletions(old.completions ?? {}),
+        };
+      },
     }
   )
 );

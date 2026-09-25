@@ -12,20 +12,24 @@ import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { Habit } from '../../types/habit';
 import { todayStr } from '../../utils/dates';
+import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
 import { getStreaks, isDueOnDate } from '../../utils/streaks';
 
 interface DraggableHabitCardProps {
   habit: Habit;
   completed: boolean;
   streak: number;
+  value: number;
   onToggle: () => void;
+  onAddStep: () => void;
+  onReset: () => void;
 }
 
 /**
  * Wraps HabitCard so a long press starts the reorder drag. The hook that
  * provides `drag` only works inside an item rendered by ReorderableList.
  */
-function DraggableHabitCard({ habit, completed, streak, onToggle }: DraggableHabitCardProps) {
+function DraggableHabitCard({ habit, ...cardProps }: DraggableHabitCardProps) {
   const drag = useReorderableDrag();
 
   function handleLongPress() {
@@ -33,15 +37,7 @@ function DraggableHabitCard({ habit, completed, streak, onToggle }: DraggableHab
     drag();
   }
 
-  return (
-    <HabitCard
-      habit={habit}
-      completed={completed}
-      streak={streak}
-      onToggle={onToggle}
-      onLongPress={handleLongPress}
-    />
-  );
+  return <HabitCard habit={habit} {...cardProps} onLongPress={handleLongPress} />;
 }
 
 export default function TodayScreen() {
@@ -50,6 +46,8 @@ export default function TodayScreen() {
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
+  const addProgress = useHabitStore((s) => s.addProgress);
+  const resetProgress = useHabitStore((s) => s.resetProgress);
   const reorderHabits = useHabitStore((s) => s.reorderHabits);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
@@ -65,6 +63,16 @@ export default function TodayScreen() {
   function handleToggle(habitId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleCompletion(habitId, today);
+  }
+
+  function handleAddStep(habit: Habit) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    addProgress(habit.id, habit.step, today);
+  }
+
+  function handleReset(habitId: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    resetProgress(habitId, today);
   }
 
   // Only today's due habits are on screen, so we hand the store just those ids.
@@ -113,14 +121,18 @@ export default function TodayScreen() {
           contentContainerStyle={styles.list}
           onReorder={handleReorder}
           renderItem={({ item }) => {
-            const habitCompletions = completions[item.id] ?? [];
-            const { current } = getStreaks(item, habitCompletions);
+            const progress = completions[item.id] ?? EMPTY_PROGRESS;
+            const { current } = getStreaks(item, progress);
+            const value = progress[today] ?? 0;
             return (
               <DraggableHabitCard
                 habit={item}
-                completed={habitCompletions.includes(today)}
+                completed={isDayComplete(item, value)}
                 streak={current}
+                value={value}
                 onToggle={() => handleToggle(item.id)}
+                onAddStep={() => handleAddStep(item)}
+                onReset={() => handleReset(item.id)}
               />
             );
           }}
