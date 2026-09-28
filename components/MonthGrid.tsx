@@ -1,17 +1,19 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { WEEKDAY_LABELS, getMonthMatrix, parseDateStr, todayStr } from '../utils/dates';
+import { withAlpha } from '../utils/goals';
 
 interface Props {
   year: number;
   month: number; // 0-indexed
-  completedDates: Set<string>;
+  /** How far a given day got toward its target, 0..1. 1 means complete. */
+  dayCredit: (dateStr: string) => number;
   color: string;
   createdAt: string;
   onToggleDay: (dateStr: string) => void;
 }
 
-export function MonthGrid({ year, month, completedDates, color, createdAt, onToggleDay }: Props) {
+export function MonthGrid({ year, month, dayCredit, color, createdAt, onToggleDay }: Props) {
   const { colors } = useTheme();
   const matrix = getMonthMatrix(year, month);
   const today = todayStr();
@@ -33,9 +35,12 @@ export function MonthGrid({ year, month, completedDates, color, createdAt, onTog
             const isFuture = parseDateStr(dateStr) > parseDateStr(today);
             const isBeforeCreation = parseDateStr(dateStr) < parseDateStr(createdAt);
             const isDisabled = isFuture || isBeforeCreation;
-            const isCompleted = completedDates.has(dateStr);
+            const credit = dayCredit(dateStr);
             const isToday = dateStr === today;
             const dayNum = parseDateStr(dateStr).getDate();
+            // Partly-filled days get a translucent wash; only a dark enough
+            // fill flips the number to white so it stays readable.
+            const fill = credit === 0 ? 'transparent' : withAlpha(color, 0.25 + credit * 0.75);
 
             return (
               <Pressable
@@ -46,13 +51,19 @@ export function MonthGrid({ year, month, completedDates, color, createdAt, onTog
                   styles.dayCell,
                   styles.dayCellButton,
                   {
-                    backgroundColor: isCompleted ? color : 'transparent',
+                    backgroundColor: fill,
                     borderColor: isToday ? color : colors.border,
                     opacity: isDisabled ? 0.3 : 1,
                   },
                 ]}
               >
-                <Text style={{ color: isCompleted ? '#fff' : colors.text, fontSize: 13, fontWeight: isToday ? '700' : '400' }}>
+                <Text
+                  style={{
+                    color: credit >= 0.6 ? '#fff' : colors.text,
+                    fontSize: 13,
+                    fontWeight: isToday ? '700' : '400',
+                  }}
+                >
                   {dayNum}
                 </Text>
               </Pressable>

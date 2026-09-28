@@ -4,7 +4,7 @@ import { Heatmap, HeatmapDay } from '../../components/Heatmap';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { addDays, parseDateStr, startOfWeek, todayStr } from '../../utils/dates';
-import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
+import { dayCredit, EMPTY_PROGRESS } from '../../utils/goals';
 import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
 
 const HEATMAP_WEEKS = 12;
@@ -42,8 +42,10 @@ export default function StatsScreen() {
     while (parseDateStr(cursor) <= parseDateStr(today)) {
       const activeHabits = habits.filter((h) => parseDateStr(h.createdAt) <= parseDateStr(cursor));
       const due = activeHabits.filter((h) => isDueOnDate(h, cursor));
-      const completed = due.filter((h) => isDayComplete(h, completions[h.id]?.[cursor]));
-      days.push({ date: cursor, ratio: due.length === 0 ? null : completed.length / due.length });
+      // Partial credit, so a half-finished count habit shades the day rather
+      // than counting for nothing.
+      const credit = due.reduce((sum, h) => sum + dayCredit(h, completions[h.id]?.[cursor]), 0);
+      days.push({ date: cursor, ratio: due.length === 0 ? null : credit / due.length });
       cursor = addDays(cursor, 1);
     }
 

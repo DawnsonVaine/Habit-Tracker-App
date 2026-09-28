@@ -8,6 +8,22 @@ export function isDayComplete(habit: Habit, value: number | undefined): boolean 
   return (value ?? 0) >= habit.target;
 }
 
+/**
+ * How far a day got toward its target, from 0 to 1. Binary habits only ever
+ * return 0 or 1; count and duration habits give partial credit, which is what
+ * lets a 4/8 day look different from a 0/8 one.
+ */
+export function dayCredit(habit: Habit, value: number | undefined): number {
+  if (habit.target <= 0) return 0;
+  return Math.max(0, Math.min(1, (value ?? 0) / habit.target));
+}
+
+/** Appends an alpha channel to a 6-digit hex colour. */
+export function withAlpha(hexColor: string, alpha: number): string {
+  const clamped = Math.max(0, Math.min(1, alpha));
+  return `${hexColor}${Math.round(clamped * 255).toString(16).padStart(2, '0')}`;
+}
+
 /** The dates a habit was completed on, which is what streak maths works from. */
 export function completedDates(habit: Habit, progress: HabitProgress): string[] {
   return Object.keys(progress).filter((dateStr) => isDayComplete(habit, progress[dateStr]));

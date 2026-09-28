@@ -3,11 +3,19 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MonthGrid } from '../../components/MonthGrid';
+import { ChartDay, ValueChart } from '../../components/ValueChart';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
-import { MONTH_LABELS, parseDateStr } from '../../utils/dates';
-import { completedDateSet, EMPTY_PROGRESS, formatTarget } from '../../utils/goals';
-import { getCompletionRate, getStreaks } from '../../utils/streaks';
+import { addDays, MONTH_LABELS, parseDateStr, todayStr } from '../../utils/dates';
+import {
+  dayCredit,
+  EMPTY_PROGRESS,
+  formatDuration,
+  formatTarget,
+} from '../../utils/goals';
+import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
+
+const CHART_DAYS = 30;
 
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,10 +30,25 @@ export default function HabitDetailScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
 
-  const completedSet = useMemo(
-    () => (habit ? completedDateSet(habit, progress) : new Set<string>()),
-    [habit, progress]
-  );
+  const chart = useMemo(() => {
+    if (!habit || habit.goalType === 'binary') return null;
+    const today = todayStr();
+    const days: ChartDay[] = [];
+    let loggedTotal = 0;
+    let dueDays = 0;
+    for (let i = CHART_DAYS - 1; i >= 0; i--) {
+      const dateStr = addDays(today, -i);
+      if (parseDateStr(dateStr) < parseDateStr(habit.createdAt)) continue;
+      const value = progress[dateStr] ?? 0;
+      const due = isDueOnDate(habit, dateStr);
+      days.push({ date: dateStr, value, due });
+      if (due) {
+        dueDays++;
+        loggedTotal += value;
+      }
+    }
+    return { days, average: dueDays === 0 ? 0 : loggedTotal / dueDays };
+  }, [habit, progress]);
 
   if (!habit) {
     return (
@@ -38,17 +61,30 @@ export default function HabitDetailScreen() {
   const { current, longest } = getStreaks(habit, progress);
   const completionRate = getCompletionRate(habit, progress, 30);
   const goalLabel = formatTarget(habit);
+  const activeHabit = habit;
+
+  function formatChartValue(value: number): string {
+    if (activeHabit.goalType === 'duration') return formatDuration(Math.round(value));
+    const rounded = Math.round(value * 10) / 10;
+    return activeHabit.unit ? `${rounded} ${activeHabit.unit}` : `${rounded}`;
+  }
 
   function handleToggleDay(dateStr: string) {
     if (!habit) return;
     const habitId = habit.id;
-    const isCompleted = completedSet.has(dateStr);
+    const isCompleted = dayCredit(habit, progress[dateStr]) >= 1;
     const d = parseDateStr(dateStr);
     const label = `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}`;
+    // Marking a count or duration day from the calendar fills it to the target,
+    // so say so rather than implying a simple tick.
+    const markMessage =
+      habit.goalType === 'binary'
+        ? `Mark ${label} as completed?`
+        : `Log the full ${formatTarget(habit)} for ${label}?`;
 
     Alert.alert(
       isCompleted ? 'Unmark day' : 'Mark day complete',
-      isCompleted ? `Remove completion for ${label}?` : `Mark ${label} as completed?`,
+      isCompleted ? `Remove completion for ${label}?` : markMessage,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -118,6 +154,23 @@ export default function HabitDetailScreen() {
           </View>
         </View>
 
+        {chart && chart.days.length > 0 && (
+          <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.chartHeader}>
+              <Text style={[styles.chartTitle, { color: colors.text }]}>Last {chart.days.length} days</Text>
+              <Text style={[styles.chartAverage, { color: colors.subtext }]}>
+                avg {formatChartValue(chart.average)}/day
+              </Text>
+            </View>
+            <ValueChart
+              days={chart.days}
+              target={habit.target}
+              color={habit.color}
+              formatValue={formatChartValue}
+            />
+          </View>
+        )}
+
         <View style={styles.monthNav}>
           <Pressable onPress={() => changeMonth(-1)} style={styles.navButton}>
             <Text style={[styles.navArrow, { color: colors.text }]}>‹</Text>
@@ -133,7 +186,7 @@ export default function HabitDetailScreen() {
         <MonthGrid
           year={year}
           month={month}
-          completedDates={completedSet}
+          dayCredit={(dateStr) => dayCredit(activeHabit, progress[dateStr])}
           color={habit.color}
           createdAt={habit.createdAt}
           onToggleDay={handleToggleDay}
@@ -163,6 +216,20 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 18, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
+  chartCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 24,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 14,
+  },
+  chartTitle: { fontSize: 14, fontWeight: '700' },
+  chartAverage: { fontSize: 12 },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 14 },
   navButton: { padding: 8 },
   navArrow: { fontSize: 24, fontWeight: '600' },
