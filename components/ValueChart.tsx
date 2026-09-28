@@ -1,4 +1,12 @@
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
 import { withAlpha } from '../utils/goals';
 
@@ -18,6 +26,27 @@ interface Props {
 }
 
 const CHART_HEIGHT = 96;
+/** Each bar starts slightly after the one to its left, giving a left-to-right sweep. */
+const BAR_STAGGER_MS = 14;
+
+function Bar({ height, color, index }: { height: number; color: string; index: number }) {
+  const grown = useSharedValue(0);
+
+  useEffect(() => {
+    grown.value = withDelay(
+      index * BAR_STAGGER_MS,
+      withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) })
+    );
+  }, [grown, index]);
+
+  // Re-target the height without replaying the sweep when a value changes.
+  const style = useAnimatedStyle(() => ({
+    height: height * grown.value,
+    backgroundColor: color,
+  }));
+
+  return <Animated.View style={[styles.bar, style]} />;
+}
 
 export function ValueChart({ days, target, color, formatValue }: Props) {
   const { colors } = useTheme();
@@ -38,19 +67,15 @@ export function ValueChart({ days, target, color, formatValue }: Props) {
           ]}
         />
         <View style={styles.bars}>
-          {days.map((day) => {
+          {days.map((day, index) => {
             const ratio = peak === 0 ? 0 : day.value / peak;
             const met = day.value >= target && target > 0;
             return (
               <View key={day.date} style={styles.barSlot}>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: Math.max(ratio * CHART_HEIGHT, day.value > 0 ? 2 : 0),
-                      backgroundColor: met ? color : withAlpha(color, day.due ? 0.45 : 0.25),
-                    },
-                  ]}
+                <Bar
+                  index={index}
+                  height={Math.max(ratio * CHART_HEIGHT, day.value > 0 ? 2 : 0)}
+                  color={met ? color : withAlpha(color, day.due ? 0.45 : 0.25)}
                 />
               </View>
             );

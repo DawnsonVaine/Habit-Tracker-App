@@ -1,7 +1,76 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
 import { WEEKDAY_LABELS, getMonthMatrix, parseDateStr, todayStr } from '../utils/dates';
 import { withAlpha } from '../utils/goals';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+interface DayCellProps {
+  dayNum: number;
+  credit: number;
+  color: string;
+  textColor: string;
+  borderColor: string;
+  isToday: boolean;
+  isDisabled: boolean;
+  onPress: () => void;
+}
+
+function DayCell({
+  dayNum,
+  credit,
+  color,
+  textColor,
+  borderColor,
+  isToday,
+  isDisabled,
+  onPress,
+}: DayCellProps) {
+  const fill = useSharedValue(credit);
+  const press = useSharedValue(1);
+
+  useEffect(() => {
+    fill.value = withTiming(credit, { duration: 240, easing: Easing.out(Easing.cubic) });
+  }, [credit, fill]);
+
+  const containerStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
+  // A partly-done day gets a translucent wash that deepens as it fills.
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: fill.value === 0 ? 0 : 0.25 + fill.value * 0.75,
+  }));
+
+  return (
+    <AnimatedPressable
+      disabled={isDisabled}
+      onPress={onPress}
+      onPressIn={() => {
+        press.value = withSpring(0.9, { damping: 14, stiffness: 340, mass: 0.5 });
+      }}
+      onPressOut={() => {
+        press.value = withSpring(1, { damping: 14, stiffness: 340, mass: 0.5 });
+      }}
+      style={[
+        styles.dayCell,
+        styles.dayCellButton,
+        { borderColor, opacity: isDisabled ? 0.3 : 1 },
+        containerStyle,
+      ]}
+    >
+      <Animated.View style={[styles.dayFill, { backgroundColor: color }, fillStyle]} />
+      <Text style={{ color: textColor, fontSize: 13, fontWeight: isToday ? '700' : '400' }}>
+        {dayNum}
+      </Text>
+    </AnimatedPressable>
+  );
+}
 
 interface Props {
   year: number;
@@ -37,36 +106,20 @@ export function MonthGrid({ year, month, dayCredit, color, createdAt, onToggleDa
             const isDisabled = isFuture || isBeforeCreation;
             const credit = dayCredit(dateStr);
             const isToday = dateStr === today;
-            const dayNum = parseDateStr(dateStr).getDate();
-            // Partly-filled days get a translucent wash; only a dark enough
-            // fill flips the number to white so it stays readable.
-            const fill = credit === 0 ? 'transparent' : withAlpha(color, 0.25 + credit * 0.75);
 
             return (
-              <Pressable
+              <DayCell
                 key={dIdx}
-                disabled={isDisabled}
+                dayNum={parseDateStr(dateStr).getDate()}
+                credit={credit}
+                color={color}
+                // Only a dark enough fill flips the number to white.
+                textColor={credit >= 0.6 ? '#fff' : colors.text}
+                borderColor={isToday ? color : colors.border}
+                isToday={isToday}
+                isDisabled={isDisabled}
                 onPress={() => onToggleDay(dateStr)}
-                style={[
-                  styles.dayCell,
-                  styles.dayCellButton,
-                  {
-                    backgroundColor: fill,
-                    borderColor: isToday ? color : colors.border,
-                    opacity: isDisabled ? 0.3 : 1,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: credit >= 0.6 ? '#fff' : colors.text,
-                    fontSize: 13,
-                    fontWeight: isToday ? '700' : '400',
-                  }}
-                >
-                  {dayNum}
-                </Text>
-              </Pressable>
+              />
             );
           })}
         </View>
@@ -84,5 +137,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     marginHorizontal: 2,
+    overflow: 'hidden',
+  },
+  dayFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 10,
   },
 });

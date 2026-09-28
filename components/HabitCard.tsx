@@ -1,8 +1,23 @@
 import { Link } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
 import { Habit } from '../types/habit';
-import { formatProgress } from '../utils/goals';
+import { dayCredit, formatProgress } from '../utils/goals';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** Quick and slightly springy, so taps feel responsive rather than bouncy. */
+const PRESS_SPRING = { damping: 14, stiffness: 340, mass: 0.5 };
+const FILL_TIMING = { duration: 260, easing: Easing.out(Easing.cubic) };
 
 interface Props {
   habit: Habit;
@@ -19,6 +34,120 @@ interface Props {
   onReset: () => void;
   /** Long-pressing the habit's name area starts a drag-to-reorder gesture. */
   onLongPress?: () => void;
+}
+
+/** Shared squash-on-press feel for every control on the card. */
+function usePressScale() {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return {
+    style,
+    onPressIn: () => {
+      scale.value = withSpring(0.88, PRESS_SPRING);
+    },
+    onPressOut: () => {
+      scale.value = withSpring(1, PRESS_SPRING);
+    },
+  };
+}
+
+function CheckButton({ color, completed, onPress }: { color: string; completed: boolean; onPress: () => void }) {
+  const press = usePressScale();
+  const fill = useSharedValue(completed ? 1 : 0);
+
+  useEffect(() => {
+    fill.value = withTiming(completed ? 1 : 0, FILL_TIMING);
+  }, [completed, fill]);
+
+  // The fill grows out from the middle as it fades in, so completing reads as a
+  // small burst rather than an instant colour swap.
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: fill.value,
+    transform: [{ scale: 0.5 + fill.value * 0.5 }],
+  }));
+  const tickStyle = useAnimatedStyle(() => ({
+    opacity: fill.value,
+    transform: [{ scale: fill.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      style={[styles.checkbox, { borderColor: color }, press.style]}
+    >
+      <Animated.View style={[styles.checkboxFill, { backgroundColor: color }, fillStyle]} />
+      <Animated.Text style={[styles.check, tickStyle]}>✓</Animated.Text>
+    </AnimatedPressable>
+  );
+}
+
+function StepButton({
+  habit,
+  value,
+  completed,
+  onAddStep,
+  onReset,
+}: {
+  habit: Habit;
+  value: number;
+  completed: boolean;
+  onAddStep: () => void;
+  onReset: () => void;
+}) {
+  const press = usePressScale();
+  const credit = dayCredit(habit, value);
+  const fill = useSharedValue(credit);
+  // Measured rather than a percentage: a percentage width on an absolutely
+  // positioned child resolves against the parent's content box, which the
+  // pill's padding and border shrink well below its visible width.
+  const trackWidth = useSharedValue(0);
+
+  useEffect(() => {
+    fill.value = withTiming(credit, FILL_TIMING);
+  }, [credit, fill]);
+
+  // The fill sweeps across the pill as progress builds, so the button itself
+  // doubles as a progress bar.
+  const fillStyle = useAnimatedStyle(() => ({ width: trackWidth.value * fill.value }));
+  const labelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(fill.value, [0, 0.7, 1], [habit.color, habit.color, '#ffffff']),
+  }));
+
+  return (
+    <AnimatedPressable
+      onPress={completed ? onReset : onAddStep}
+      onLongPress={onReset}
+      delayLongPress={400}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      onLayout={(e) => {
+        trackWidth.value = e.nativeEvent.layout.width;
+      }}
+      hitSlop={4}
+      style={[styles.stepper, { borderColor: habit.color }, press.style]}
+    >
+      <Animated.View style={[styles.stepperFill, { backgroundColor: habit.color }, fillStyle]} />
+      <Animated.Text style={[styles.stepperText, labelStyle]}>{completed ? '✓' : '+'}</Animated.Text>
+    </AnimatedPressable>
+  );
+}
+
+function MinusButton({ color, onPress }: { color: string; onPress: () => void }) {
+  const press = usePressScale();
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      hitSlop={4}
+      style={[styles.stepButton, { borderColor: color }, press.style]}
+    >
+      <Text style={[styles.stepperText, { color }]}>−</Text>
+    </AnimatedPressable>
+  );
 }
 
 export function HabitCard({
@@ -56,49 +185,20 @@ export function HabitCard({
       </Link>
 
       {isBinary ? (
-        <Pressable
-          onPress={onToggle}
-          style={[
-            styles.checkbox,
-            {
-              backgroundColor: completed ? habit.color : 'transparent',
-              borderColor: habit.color,
-            },
-          ]}
-        >
-          {completed && <Text style={styles.check}>✓</Text>}
-        </Pressable>
+        <CheckButton color={habit.color} completed={completed} onPress={onToggle} />
       ) : (
         <View style={styles.stepperGroup}>
           {/* Nothing to take away at zero, so the minus only appears once there is. */}
-          {value > 0 && (
-            <Pressable
-              onPress={onSubtractStep}
-              hitSlop={4}
-              style={[styles.stepButton, { borderColor: habit.color }]}
-            >
-              <Text style={[styles.stepperText, { color: habit.color }]}>−</Text>
-            </Pressable>
-          )}
+          {value > 0 && <MinusButton color={habit.color} onPress={onSubtractStep} />}
           {/* Long press clears the day. Reset lives here rather than on the card
               body, which is already taken by drag-to-reorder. */}
-          <Pressable
-            onPress={completed ? onReset : onAddStep}
-            onLongPress={onReset}
-            delayLongPress={400}
-            hitSlop={4}
-            style={[
-              styles.stepper,
-              {
-                backgroundColor: completed ? habit.color : 'transparent',
-                borderColor: habit.color,
-              },
-            ]}
-          >
-            <Text style={[styles.stepperText, { color: completed ? '#fff' : habit.color }]}>
-              {completed ? '✓' : '+'}
-            </Text>
-          </Pressable>
+          <StepButton
+            habit={habit}
+            value={value}
+            completed={completed}
+            onAddStep={onAddStep}
+            onReset={onReset}
+          />
         </View>
       )}
     </View>
@@ -140,6 +240,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
+    overflow: 'hidden',
+  },
+  checkboxFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 16,
   },
   check: {
     color: '#fff',
@@ -167,6 +276,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  stepperFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
   },
   stepperText: {
     fontSize: 17,
