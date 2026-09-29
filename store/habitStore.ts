@@ -7,7 +7,14 @@ import { todayStr } from '../utils/dates';
 interface HabitState {
   habits: Habit[];
   completions: CompletionsMap;
+  /**
+   * The level the user has already been shown. null means we have not recorded
+   * one yet, in which case the current level is adopted silently rather than
+   * celebrating progress they earned before this existed.
+   */
+  lastSeenLevel: number | null;
   hasHydrated: boolean;
+  acknowledgeLevel: (level: number) => void;
   addHabit: (input: NewHabitInput) => Habit;
   updateHabit: (id: string, input: NewHabitInput) => void;
   deleteHabit: (id: string) => void;
@@ -31,6 +38,7 @@ function generateId(): string {
 interface PersistedState {
   habits: Habit[];
   completions: CompletionsMap;
+  lastSeenLevel?: number | null;
 }
 
 /** Shape written by app versions before goal types existed. */
@@ -66,7 +74,12 @@ export const useHabitStore = create<HabitState>()(
     (set, get) => ({
       habits: [],
       completions: {},
+      lastSeenLevel: null,
       hasHydrated: false,
+
+      acknowledgeLevel: (level) => {
+        set({ lastSeenLevel: level });
+      },
 
       addHabit: (input) => {
         const habit: Habit = {
@@ -176,18 +189,24 @@ export const useHabitStore = create<HabitState>()(
         });
       },
 
+      // Both of these change lifetime XP wholesale, so forget the last seen
+      // level and adopt whatever the new data implies without celebrating it.
       replaceAllData: (habits, completions) => {
-        set({ habits, completions });
+        set({ habits, completions, lastSeenLevel: null });
       },
 
       clearAllData: () => {
-        set({ habits: [], completions: {} });
+        set({ habits: [], completions: {}, lastSeenLevel: null });
       },
     }),
     {
       name: 'habit-tracker-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ habits: state.habits, completions: state.completions }),
+      partialize: (state) => ({
+        habits: state.habits,
+        completions: state.completions,
+        lastSeenLevel: state.lastSeenLevel,
+      }),
       version: 1,
       // v0 stored completions as habitId -> ["yyyy-mm-dd", ...] and had no goal
       // fields. Every existing habit becomes a binary one, and each completed

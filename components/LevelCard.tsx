@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
-import { Progression } from '../utils/progression';
+import { Progression, rankForLevel } from '../utils/progression';
 
 interface Props {
   progression: Progression;
@@ -16,7 +16,8 @@ interface Props {
 
 export function LevelCard({ progression, accentColor }: Props) {
   const { colors } = useTheme();
-  const { level, rank, nextRank, xpTotal, xpIntoLevel, xpForLevel, ratio } = progression;
+  const { level, rank, nextTier, nextTierLevel, xpTotal, xpIntoLevel, xpForLevel, ratio, isMaxLevel } =
+    progression;
 
   const fill = useSharedValue(0);
   // Measured, not a percentage: a percentage width on an absolutely positioned
@@ -32,10 +33,10 @@ export function LevelCard({ progression, accentColor }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.header}>
-        <Text style={styles.rankEmoji}>{rank.emoji}</Text>
+        <Text style={styles.rankEmoji}>{rank.tier.emoji}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.level, { color: colors.text }]}>Level {level}</Text>
-          <Text style={[styles.rankName, { color: colors.subtext }]}>{rank.name}</Text>
+          <Text style={[styles.level, { color: colors.text }]}>{rank.label}</Text>
+          <Text style={[styles.rankName, { color: colors.subtext }]}>Level {level}</Text>
         </View>
         <Text style={[styles.totalXp, { color: accentColor }]}>{xpTotal.toLocaleString()} XP</Text>
       </View>
@@ -51,11 +52,13 @@ export function LevelCard({ progression, accentColor }: Props) {
 
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: colors.subtext }]}>
-          {xpIntoLevel} / {xpForLevel} XP to level {level + 1}
+          {isMaxLevel
+            ? 'Top rank reached'
+            : `${xpIntoLevel} / ${xpForLevel} XP to ${rankForLevel(level + 1).label}`}
         </Text>
-        {nextRank && (
+        {nextTier && nextTierLevel && (
           <Text style={[styles.footerText, { color: colors.subtext }]}>
-            {nextRank.emoji} {nextRank.name} at {nextRank.minLevel}
+            {nextTier.emoji} {nextTier.name} at level {nextTierLevel}
           </Text>
         )}
       </View>
