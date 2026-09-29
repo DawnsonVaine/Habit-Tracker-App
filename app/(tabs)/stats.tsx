@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Heatmap, HeatmapDay } from '../../components/Heatmap';
+import { LevelCard } from '../../components/LevelCard';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { addDays, parseDateStr, startOfWeek, todayStr } from '../../utils/dates';
 import { dayCredit, EMPTY_PROGRESS } from '../../utils/goals';
+import { getProgression, getTotalXp } from '../../utils/progression';
 import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
 
 const HEATMAP_WEEKS = 12;
@@ -16,6 +18,12 @@ export default function StatsScreen() {
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
   const habits = useMemo(() => allHabits.filter((h) => !h.archived), [allHabits]);
+
+  // Every habit counts toward XP, archived included — the work was still done.
+  const progression = useMemo(
+    () => getProgression(getTotalXp(allHabits, completions)),
+    [allHabits, completions]
+  );
 
   const overallRate = useMemo(() => {
     if (habits.length === 0) return 0;
@@ -70,6 +78,8 @@ export default function StatsScreen() {
         </Text>
       ) : (
         <>
+          <LevelCard progression={progression} accentColor={colors.accent} />
+
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.bigNumber, { color: colors.accent }]}>{overallRate}%</Text>
             <Text style={[styles.cardLabel, { color: colors.subtext }]}>Overall completion (last 30 days)</Text>
