@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { exportBackup, importBackup } from '../../utils/backup';
+import { cancelAllReminders, resetAllReminders } from '../../utils/notifications';
 
 function SettingsRow({
   title,
@@ -36,7 +37,12 @@ export default function SettingsScreen() {
   const completions = useHabitStore((s) => s.completions);
   const replaceAllData = useHabitStore((s) => s.replaceAllData);
   const clearAllData = useHabitStore((s) => s.clearAllData);
+  const setNotificationId = useHabitStore((s) => s.setNotificationId);
   const [busy, setBusy] = useState(false);
+
+  function applyReminderUpdates(updates: Map<string, string | null>) {
+    updates.forEach((notificationId, habitId) => setNotificationId(habitId, notificationId));
+  }
 
   const archivedHabits = useMemo(() => habits.filter((h) => h.archived), [habits]);
 
@@ -64,7 +70,12 @@ export default function SettingsScreen() {
           {
             text: 'Restore',
             style: 'destructive',
-            onPress: () => replaceAllData(data.habits, data.completions),
+            onPress: async () => {
+              replaceAllData(data.habits, data.completions);
+              // The habits just replaced had their own reminders scheduled, and
+              // the restored ones carry ids from whichever device exported them.
+              applyReminderUpdates(await resetAllReminders(data.habits));
+            },
           },
         ]
       );
@@ -81,7 +92,15 @@ export default function SettingsScreen() {
       'This will permanently delete every habit and all history. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete Everything', style: 'destructive', onPress: () => clearAllData() },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            // Without this the reminders outlive the habits and keep firing.
+            await cancelAllReminders();
+            clearAllData();
+          },
+        },
       ]
     );
   }

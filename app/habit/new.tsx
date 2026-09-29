@@ -171,7 +171,7 @@ export default function NewHabitScreen() {
         );
         setNotificationId(existing.id, notifId);
       } else if (existing.notificationId) {
-        await cancelHabitReminder(existing.notificationId);
+        await cancelHabitReminder(existing.notificationId, existing.id);
         setNotificationId(existing.id, null);
       }
     } else {
@@ -195,7 +195,7 @@ export default function NewHabitScreen() {
 
     if (nextArchived) {
       if (existing.notificationId) {
-        await cancelHabitReminder(existing.notificationId);
+        await cancelHabitReminder(existing.notificationId, existing.id);
         setNotificationId(existing.id, null);
       }
     } else if (existing.reminderTime) {
@@ -219,7 +219,7 @@ export default function NewHabitScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await cancelHabitReminder(existing.notificationId);
+          await cancelHabitReminder(existing.notificationId, existing.id);
           deleteHabit(existing.id);
           router.back();
         },
