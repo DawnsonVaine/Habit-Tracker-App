@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, AlertButton, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   NestedReorderableList,
@@ -11,6 +11,7 @@ import {
 } from 'react-native-reorderable-list';
 import { HabitCard } from '../../components/HabitCard';
 import { LevelStrip } from '../../components/LevelStrip';
+import { NotDueSection } from '../../components/NotDueSection';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { font, radius, space, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
@@ -97,6 +98,12 @@ export default function TodayScreen() {
     () => activeHabits.filter((h) => isDueOnDate(h, today)),
     [activeHabits, today]
   );
+  // Still listed so they can be reached and edited on their off days.
+  const notDueHabits = useMemo(
+    () => activeHabits.filter((h) => !isDueOnDate(h, today)),
+    [activeHabits, today]
+  );
+  const [showNotDue, setShowNotDue] = useState(false);
 
   // Everything a card shows, worked out once per habit. Sorting by streak
   // reads it too, so streaks aren't recomputed on every comparison.
@@ -279,17 +286,20 @@ export default function TodayScreen() {
             Tap + Habit to add something you'd like to do every day.
           </Text>
         </View>
-      ) : dueHabits.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyBadge, { backgroundColor: colors.accentSoft }]}>
-            <Text style={styles.emptyEmoji}>☀️</Text>
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing due today</Text>
-          <Text style={[styles.emptyText, { color: colors.subtext }]}>Enjoy the break.</Text>
-        </View>
       ) : (
         <ScrollViewContainer contentContainerStyle={styles.list}>
-          {!canDrag && (
+          {/* A rest-day message rather than a full-screen one, so the habits
+              below stay reachable on days when nothing is due. */}
+          {dueHabits.length === 0 && (
+            <View style={styles.restDay}>
+              <View style={[styles.emptyBadge, { backgroundColor: colors.accentSoft }]}>
+                <Text style={styles.emptyEmoji}>☀️</Text>
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing due today</Text>
+              <Text style={[styles.emptyText, { color: colors.subtext }]}>Enjoy the break.</Text>
+            </View>
+          )}
+          {!canDrag && dueHabits.length > 0 && (
             <Text style={[styles.sortHint, { color: colors.subtext }]}>
               Sorted by {SORT_MODE_LABELS[sortMode].toLowerCase()} — switch to Custom to drag.
             </Text>
@@ -341,6 +351,17 @@ export default function TodayScreen() {
               </View>
             );
           })}
+          {notDueHabits.length > 0 && (
+            <NotDueSection
+              habits={notDueHabits}
+              today={today}
+              // With nothing due there's nothing else on screen, so keep it open.
+              expanded={showNotDue || dueHabits.length === 0}
+              onToggle={dueHabits.length > 0 ? () => setShowNotDue((v) => !v) : undefined}
+              onOpen={(habit) => router.push({ pathname: '/habit/[id]', params: { id: habit.id } })}
+              onEdit={(habit) => router.push({ pathname: '/habit/new', params: { id: habit.id } })}
+            />
+          )}
         </ScrollViewContainer>
       )}
     </View>
@@ -388,6 +409,7 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   emptyTitle: { ...font.headline },
+  restDay: { alignItems: 'center', paddingTop: space.xxl, paddingBottom: space.lg, gap: space.sm },
   emptyEmoji: { fontSize: 38 },
   emptyText: { ...font.body, textAlign: 'center', lineHeight: 21 },
 });

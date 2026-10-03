@@ -161,12 +161,6 @@ export default function SettingsScreen() {
           colors={colors}
         />
         <SettingsRow
-          title="Reorder Habits"
-          subtitle="Arrange all habits, including ones not due today"
-          onPress={() => router.push('/reorder')}
-          colors={colors}
-        />
-        <SettingsRow
           title="Archived Habits"
           subtitle={archivedHabits.length > 0 ? `${archivedHabits.length} archived` : 'No archived habits'}
           onPress={() => router.push('/archive')}
