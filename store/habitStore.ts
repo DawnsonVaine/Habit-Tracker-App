@@ -321,7 +321,9 @@ export const useHabitStore = create<HabitState>()(
 );
 
 // Track hydration status separately so screens can wait for persisted data to load.
-useHabitStore.setState({ hasHydrated: false });
+// hasHydrated already starts false, so nothing is set before loading finishes:
+// persist writes the store to disk on every setState, and a write that early
+// would save the empty initial state over the user's data.
 const unsub = useHabitStore.persist.onFinishHydration(() => {
   useHabitStore.setState({ hasHydrated: true });
   unsub();
