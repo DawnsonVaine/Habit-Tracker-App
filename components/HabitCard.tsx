@@ -36,6 +36,8 @@ interface Props {
   skipped: boolean;
   /** Long-pressing the completion control opens rest-day and reset options. */
   onOptions: () => void;
+  /** Short tag shown beside the name, e.g. a running challenge's day count. */
+  badge?: string;
   /** Long-pressing the habit's name area starts a drag-to-reorder gesture. */
   onLongPress?: () => void;
 }
@@ -190,6 +192,7 @@ export function HabitCard({
   onReset,
   skipped,
   onOptions,
+  badge,
   onLongPress,
 }: Props) {
   const { colors } = useTheme();
@@ -212,9 +215,18 @@ export function HabitCard({
         <Pressable style={styles.info} onLongPress={onLongPress} delayLongPress={220}>
           <Text style={[styles.emoji, resting && styles.restingEmoji]}>{habit.emoji}</Text>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-              {habit.name}
-            </Text>
+            <View style={styles.nameRow}>
+              <Text style={[styles.name, styles.nameText, { color: colors.text }]} numberOfLines={1}>
+                {habit.name}
+              </Text>
+              {badge && (
+                <View style={[styles.badge, { backgroundColor: withAlpha(habit.color, 0.14) }]}>
+                  <Text style={[styles.badgeText, { color: habit.color }]} numberOfLines={1}>
+                    {badge}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.streak, { color: colors.subtext }]} numberOfLines={1}>
               {subtitle}
             </Text>
@@ -273,6 +285,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Lets a long name truncate instead of pushing the badge off the card.
+  nameText: { flexShrink: 1 },
+  badge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
   streak: {
     fontSize: 13,
     marginTop: 2,

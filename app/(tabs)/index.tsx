@@ -2,16 +2,20 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useMemo } from 'react';
 import { Alert, AlertButton, Pressable, StyleSheet, Text, View } from 'react-native';
-import ReorderableList, {
+import {
+  NestedReorderableList,
   ReorderableListReorderEvent,
   reorderItems,
+  ScrollViewContainer,
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { HabitCard } from '../../components/HabitCard';
 import { useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
-import { Habit } from '../../types/habit';
+import { Habit, SortMode } from '../../types/habit';
 import { todayStr } from '../../utils/dates';
+import { groupByCategory, SORT_MODE_LABELS, sortHabits } from '../../utils/categories';
+import { getChallengeProgress } from '../../utils/challenges';
 import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
 import {
   canSkipDay,
@@ -28,6 +32,9 @@ interface DraggableHabitCardProps {
   streak: number;
   value: number;
   skipped: boolean;
+  badge?: string;
+  /** False while a computed sort is active, since dragging would fight it. */
+  draggable: boolean;
   onToggle: () => void;
   onAddStep: () => void;
   onSubtractStep: () => void;
@@ -39,7 +46,7 @@ interface DraggableHabitCardProps {
  * Wraps HabitCard so a long press starts the reorder drag. The hook that
  * provides `drag` only works inside an item rendered by ReorderableList.
  */
-function DraggableHabitCard({ habit, ...cardProps }: DraggableHabitCardProps) {
+function DraggableHabitCard({ habit, draggable, ...cardProps }: DraggableHabitCardProps) {
   const drag = useReorderableDrag();
 
   function handleLongPress() {
@@ -47,7 +54,9 @@ function DraggableHabitCard({ habit, ...cardProps }: DraggableHabitCardProps) {
     drag();
   }
 
-  return <HabitCard habit={habit} {...cardProps} onLongPress={handleLongPress} />;
+  return (
+    <HabitCard habit={habit} {...cardProps} onLongPress={draggable ? handleLongPress : undefined} />
+  );
 }
 
 export default function TodayScreen() {
@@ -60,6 +69,10 @@ export default function TodayScreen() {
   const resetProgress = useHabitStore((s) => s.resetProgress);
   const skips = useHabitStore((s) => s.skips);
   const setSkipped = useHabitStore((s) => s.setSkipped);
+  const challenges = useHabitStore((s) => s.challenges);
+  const categories = useHabitStore((s) => s.categories);
+  const sortMode = useHabitStore((s) => s.sortMode);
+  const setSortMode = useHabitStore((s) => s.setSortMode);
   const reorderHabits = useHabitStore((s) => s.reorderHabits);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
@@ -70,7 +83,63 @@ export default function TodayScreen() {
   );
 
   const activeHabits = useMemo(() => habits.filter((h) => !h.archived), [habits]);
-  const dueHabits = activeHabits.filter((h) => isDueOnDate(h, today));
+  const dueHabits = useMemo(
+    () => activeHabits.filter((h) => isDueOnDate(h, today)),
+    [activeHabits, today]
+  );
+
+  // Everything a card shows, worked out once per habit. Sorting by streak
+  // reads it too, so streaks aren't recomputed on every comparison.
+  const cardData = useMemo(() => {
+    const data = new Map<
+      string,
+      { skipDates: readonly string[]; streak: number; value: number; done: boolean }
+    >();
+    for (const habit of dueHabits) {
+      const progress = completions[habit.id] ?? EMPTY_PROGRESS;
+      const skipDates = skips[habit.id] ?? EMPTY_SKIPS;
+      const value = progress[today] ?? 0;
+      data.set(habit.id, {
+        skipDates,
+        streak: getStreaks(habit, progress, new Set(skipDates)).current,
+        value,
+        done: isDayComplete(habit, value),
+      });
+    }
+    return data;
+  }, [completions, dueHabits, skips, today]);
+
+  const sections = useMemo(
+    () =>
+      groupByCategory(dueHabits, categories).map((section) => ({
+        ...section,
+        habits: sortHabits(section.habits, sortMode, {
+          streakOf: (h) => cardData.get(h.id)?.streak ?? 0,
+          isDoneToday: (h) => cardData.get(h.id)?.done ?? false,
+        }),
+      })),
+    [cardData, categories, dueHabits, sortMode]
+  );
+  const canDrag = sortMode === 'custom';
+
+  // "🏆 Day 12/56" for each habit with a challenge running.
+  const challengeBadges = useMemo(() => {
+    const badges = new Map<string, string>();
+    for (const challenge of challenges) {
+      const habit = habits.find((h) => h.id === challenge.habitId);
+      if (!habit) continue;
+      const result = getChallengeProgress(
+        challenge,
+        habit,
+        completions[habit.id] ?? EMPTY_PROGRESS,
+        new Set(skips[habit.id] ?? EMPTY_SKIPS)
+      );
+      if (result.status === 'active') {
+        badges.set(habit.id, `🏆 Day ${result.dayNumber}/${challenge.lengthDays}`);
+      }
+    }
+    return badges;
+  }, [challenges, completions, habits, skips]);
 
   function handleToggle(habitId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -133,8 +202,26 @@ export default function TodayScreen() {
 
   // Only today's due habits are on screen, so we hand the store just those ids.
   // reorderHabits permutes the slots they occupy and leaves every other habit put.
-  function handleReorder({ from, to }: ReorderableListReorderEvent) {
-    reorderHabits(reorderItems(dueHabits, from, to).map((h) => h.id));
+  // Each section reorders on its own. Only that section's ids reach the store,
+  // and reorderHabits permutes just the slots they occupy, so other sections
+  // and habits not due today stay exactly where they were.
+  function handleReorder(sectionHabits: Habit[], { from, to }: ReorderableListReorderEvent) {
+    reorderHabits(reorderItems(sectionHabits, from, to).map((h) => h.id));
+  }
+
+  function handleSortPress() {
+    const modes: SortMode[] = ['custom', 'name', 'streak', 'todo'];
+    Alert.alert(
+      'Sort habits',
+      'Applies within each section. Dragging to reorder only works in Custom.',
+      [
+        ...modes.map((mode) => ({
+          text: `${SORT_MODE_LABELS[mode]}${mode === sortMode ? '  ✓' : ''}`,
+          onPress: () => setSortMode(mode),
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]
+    );
   }
 
   if (!hasHydrated) {
@@ -149,6 +236,13 @@ export default function TodayScreen() {
           <Text style={[styles.subtitle, { color: colors.subtext }]}>{todayLabel}</Text>
         </View>
         <View style={styles.headerActions}>
+          {dueHabits.length > 1 && (
+            <Pressable onPress={handleSortPress} hitSlop={8} style={styles.sortButton}>
+              <Text style={[styles.sortButtonText, { color: colors.accent }]}>
+                ⇅ {SORT_MODE_LABELS[sortMode]}
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             style={[styles.addButton, { backgroundColor: colors.accent }]}
             onPress={() => router.push('/habit/new')}
@@ -171,32 +265,61 @@ export default function TodayScreen() {
           <Text style={[styles.emptyText, { color: colors.subtext }]}>Nothing due today. Enjoy the break!</Text>
         </View>
       ) : (
-        <ReorderableList
-          data={dueHabits}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          onReorder={handleReorder}
-          renderItem={({ item }) => {
-            const progress = completions[item.id] ?? EMPTY_PROGRESS;
-            const skipDates = skips[item.id] ?? EMPTY_SKIPS;
-            const { current } = getStreaks(item, progress, new Set(skipDates));
-            const value = progress[today] ?? 0;
+        <ScrollViewContainer contentContainerStyle={styles.list}>
+          {!canDrag && (
+            <Text style={[styles.sortHint, { color: colors.subtext }]}>
+              Sorted by {SORT_MODE_LABELS[sortMode].toLowerCase()} — switch to Custom to drag.
+            </Text>
+          )}
+          {sections.map((section) => {
+            const doneCount = section.habits.filter((h) => cardData.get(h.id)?.done).length;
             return (
-              <DraggableHabitCard
-                habit={item}
-                completed={isDayComplete(item, value)}
-                streak={current}
-                value={value}
-                skipped={skipDates.includes(today)}
-                onToggle={() => handleToggle(item.id)}
-                onAddStep={() => handleStep(item, 1)}
-                onSubtractStep={() => handleStep(item, -1)}
-                onReset={() => handleReset(item.id)}
-                onOptions={() => handleOptions(item, value, skipDates)}
-              />
+              <View key={section.key}>
+                {section.title && (
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
+                      {section.emoji ? `${section.emoji} ` : ''}
+                      {section.title.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.sectionCount, { color: colors.subtext }]}>
+                      {doneCount}/{section.habits.length}
+                    </Text>
+                  </View>
+                )}
+                <NestedReorderableList
+                  data={section.habits}
+                  keyExtractor={(item) => item.id}
+                  // The page scrolls, not each section; this also tells React
+                  // Native the nested list isn't competing with it for scroll.
+                  scrollEnabled={false}
+                  dragEnabled={canDrag}
+                  onReorder={(event) => handleReorder(section.habits, event)}
+                  renderItem={({ item }) => {
+                    const data = cardData.get(item.id);
+                    const skipDates = data?.skipDates ?? EMPTY_SKIPS;
+                    const value = data?.value ?? 0;
+                    return (
+                      <DraggableHabitCard
+                        habit={item}
+                        completed={data?.done ?? false}
+                        streak={data?.streak ?? 0}
+                        value={value}
+                        skipped={skipDates.includes(today)}
+                        badge={challengeBadges.get(item.id)}
+                        draggable={canDrag}
+                        onToggle={() => handleToggle(item.id)}
+                        onAddStep={() => handleStep(item, 1)}
+                        onSubtractStep={() => handleStep(item, -1)}
+                        onReset={() => handleReset(item.id)}
+                        onOptions={() => handleOptions(item, value, skipDates)}
+                      />
+                    );
+                  }}
+                />
+              </View>
             );
-          }}
-        />
+          })}
+        </ScrollViewContainer>
       )}
     </View>
   );
@@ -221,7 +344,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   addButtonText: { color: '#fff', fontWeight: '600' },
+  sortButton: { paddingVertical: 8, paddingHorizontal: 2 },
+  sortButtonText: { fontSize: 14, fontWeight: '600' },
+  sortHint: { fontSize: 12, marginBottom: 10 },
   list: { paddingHorizontal: 20, paddingBottom: 24 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
+  sectionCount: { fontSize: 12, fontWeight: '600' },
   empty: {
     flex: 1,
     alignItems: 'center',

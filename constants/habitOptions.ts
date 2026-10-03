@@ -15,3 +15,17 @@ export const HABIT_EMOJIS = [
 ];
 
 export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export const CATEGORY_EMOJIS = [
+  '💪', '🧠', '❤️', '🏠', '💼', '📚', '🧘', '🍎',
+  '💰', '🎨', '👥', '🌱', '⭐', '🎯', '🎵', '✈️',
+];
+
+/** Offered as one-tap suggestions when no categories exist yet. */
+export const STARTER_CATEGORIES = [
+  { name: 'Fitness', emoji: '💪' },
+  { name: 'Mind', emoji: '🧠' },
+  { name: 'Health', emoji: '❤️' },
+  { name: 'Home', emoji: '🏠' },
+  { name: 'Work', emoji: '💼' },
+];

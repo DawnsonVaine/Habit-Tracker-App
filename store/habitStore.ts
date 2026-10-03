@@ -1,7 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { Challenge, CompletionsMap, Habit, HabitProgress, NewHabitInput, SkipsMap } from '../types/habit';
+import {
+  Category,
+  Challenge,
+  CompletionsMap,
+  Habit,
+  HabitProgress,
+  NewHabitInput,
+  SkipsMap,
+  SortMode,
+} from '../types/habit';
 import { canChallengeHabit, getChallengeProgress } from '../utils/challenges';
 import { todayStr } from '../utils/dates';
 import { canSkipDay } from '../utils/skips';
@@ -13,6 +22,9 @@ interface HabitState {
   skips: SkipsMap;
   /** Every challenge ever started, kept so finished ones still pay their bonus. */
   challenges: Challenge[];
+  /** In the order their sections appear on Today. */
+  categories: Category[];
+  sortMode: SortMode;
   /**
    * The level the user has already been shown. null means we have not recorded
    * one yet, in which case the current level is adopted silently rather than
@@ -43,12 +55,19 @@ interface HabitState {
   setNotificationId: (habitId: string, notificationId: string | null) => void;
   setArchived: (id: string, archived: boolean) => void;
   reorderHabits: (orderedIds: string[]) => void;
-  replaceAllData: (
-    habits: Habit[],
-    completions: CompletionsMap,
-    skips?: SkipsMap,
-    challenges?: Challenge[]
-  ) => void;
+  addCategory: (name: string, emoji: string) => Category;
+  updateCategory: (id: string, name: string, emoji: string) => void;
+  /** Removes a category; its habits move to "Other" rather than being deleted. */
+  deleteCategory: (id: string) => void;
+  reorderCategories: (orderedIds: string[]) => void;
+  setSortMode: (mode: SortMode) => void;
+  replaceAllData: (data: {
+    habits: Habit[];
+    completions: CompletionsMap;
+    skips?: SkipsMap;
+    challenges?: Challenge[];
+    categories?: Category[];
+  }) => void;
   clearAllData: () => void;
 }
 
@@ -61,6 +80,8 @@ interface PersistedState {
   completions: CompletionsMap;
   skips?: SkipsMap;
   challenges?: Challenge[];
+  categories?: Category[];
+  sortMode?: SortMode;
   lastSeenLevel?: number | null;
 }
 
@@ -71,19 +92,23 @@ function clearSkip(skips: SkipsMap, habitId: string, dateStr: string): SkipsMap 
   return { ...skips, [habitId]: dates.filter((d) => d !== dateStr) };
 }
 
-/** Shape written by app versions before goal types existed. */
-interface LegacyPersistedState {
+/** Any earlier saved shape: v0 predates goal types, v1 predates categories. */
+interface LegacyPersistedState extends Omit<Partial<PersistedState>, 'habits' | 'completions'> {
   habits?: (Partial<Habit> & { id: string })[];
   completions?: Record<string, string[] | HabitProgress>;
 }
 
-/** Fills in goal fields on a habit saved before they existed. */
+/**
+ * Fills in fields a habit was saved without. Safe to apply to a habit of any
+ * age, since the habit's own values always win over these defaults.
+ */
 function migrateHabit(habit: Partial<Habit> & { id: string }): Habit {
   return {
     goalType: 'binary',
     target: 1,
     unit: null,
     step: 1,
+    categoryId: null,
     ...habit,
   } as Habit;
 }
@@ -106,6 +131,8 @@ export const useHabitStore = create<HabitState>()(
       completions: {},
       skips: {},
       challenges: [],
+      categories: [],
+      sortMode: 'custom',
       lastSeenLevel: null,
       hasHydrated: false,
 
@@ -281,17 +308,57 @@ export const useHabitStore = create<HabitState>()(
         });
       },
 
+      addCategory: (name, emoji) => {
+        const category: Category = { id: generateId(), name: name.trim(), emoji };
+        set((state) => ({ categories: [...state.categories, category] }));
+        return category;
+      },
+
+      updateCategory: (id, name, emoji) => {
+        set((state) => ({
+          categories: state.categories.map((c) => (c.id === id ? { ...c, name: name.trim(), emoji } : c)),
+        }));
+      },
+
+      deleteCategory: (id) => {
+        set((state) => ({
+          categories: state.categories.filter((c) => c.id !== id),
+          habits: state.habits.map((h) => (h.categoryId === id ? { ...h, categoryId: null } : h)),
+        }));
+      },
+
+      reorderCategories: (orderedIds) => {
+        set((state) => {
+          const byId = new Map(state.categories.map((c) => [c.id, c]));
+          const ordered = orderedIds.map((id) => byId.get(id)).filter((c): c is Category => !!c);
+          // Anything not mentioned keeps its place at the end rather than vanishing.
+          const rest = state.categories.filter((c) => !orderedIds.includes(c.id));
+          return { categories: [...ordered, ...rest] };
+        });
+      },
+
+      setSortMode: (mode) => {
+        set({ sortMode: mode });
+      },
+
       // Both of these change lifetime XP wholesale, so forget the last seen
       // level and adopt whatever the new data implies without celebrating it.
-      replaceAllData: (habits, completions, skips = {}, challenges = []) => {
+      replaceAllData: ({ habits, completions, skips = {}, challenges = [], categories = [] }) => {
         // Restored challenges were finished on another install; don't replay
         // celebrations for them here.
         const settled = challenges.map((c) => ({ ...c, celebrated: true }));
-        set({ habits, completions, skips, challenges: settled, lastSeenLevel: null });
+        set({ habits, completions, skips, challenges: settled, categories, lastSeenLevel: null });
       },
 
       clearAllData: () => {
-        set({ habits: [], completions: {}, skips: {}, challenges: [], lastSeenLevel: null });
+        set({
+          habits: [],
+          completions: {},
+          skips: {},
+          challenges: [],
+          categories: [],
+          lastSeenLevel: null,
+        });
       },
     }),
     {
@@ -302,19 +369,24 @@ export const useHabitStore = create<HabitState>()(
         completions: state.completions,
         skips: state.skips,
         challenges: state.challenges,
+        categories: state.categories,
+        sortMode: state.sortMode,
         lastSeenLevel: state.lastSeenLevel,
       }),
-      version: 1,
+      version: 2,
       // v0 stored completions as habitId -> ["yyyy-mm-dd", ...] and had no goal
-      // fields. Every existing habit becomes a binary one, and each completed
-      // date becomes a logged value of 1, which is that habit's target.
+      // fields: every habit becomes binary, and each completed date becomes a
+      // value of 1, which is its target. v1 had no categories: every habit goes
+      // under "Other". Both steps are idempotent, so one pass covers any age,
+      // and everything else saved (skips, challenges...) is carried across.
       migrate: (persisted, version) => {
-        if (version >= 1) return persisted as PersistedState;
+        if (version >= 2) return persisted as PersistedState;
         const old = (persisted ?? {}) as LegacyPersistedState;
         return {
+          ...old,
           habits: (old.habits ?? []).map(migrateHabit),
           completions: migrateCompletions(old.completions ?? {}),
-        };
+        } as PersistedState;
       },
     }
   )

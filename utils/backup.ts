@@ -1,9 +1,9 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Challenge, CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
+import { Category, Challenge, CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
 
-const BACKUP_VERSION = 4;
+const BACKUP_VERSION = 5;
 
 interface BackupPayload {
   version: number;
@@ -12,6 +12,7 @@ interface BackupPayload {
   completions: CompletionsMap;
   skips: SkipsMap;
   challenges: Challenge[];
+  categories: Category[];
 }
 
 export interface BackupData {
@@ -19,12 +20,13 @@ export interface BackupData {
   completions: CompletionsMap;
   skips: SkipsMap;
   challenges: Challenge[];
+  categories: Category[];
 }
 
 /**
  * Any backup version, oldest first: v1 predates goal types and stored
- * completions as date arrays, v1-v2 predate rest days, and v1-v3 predate
- * challenges.
+ * completions as date arrays, v1-v2 predate rest days, v1-v3 predate
+ * challenges, and v1-v4 predate categories.
  */
 interface LegacyBackupPayload {
   version: number;
@@ -32,11 +34,12 @@ interface LegacyBackupPayload {
   completions: Record<string, string[] | HabitProgress>;
   skips?: SkipsMap;
   challenges?: Challenge[];
+  categories?: Category[];
 }
 
 function upgradePayload(payload: LegacyBackupPayload): BackupData {
   const habits = payload.habits.map(
-    (habit) => ({ goalType: 'binary', target: 1, unit: null, step: 1, ...habit }) as Habit
+    (habit) => ({ goalType: 'binary', target: 1, unit: null, step: 1, categoryId: null, ...habit }) as Habit
   );
   const completions: CompletionsMap = {};
   for (const [habitId, entry] of Object.entries(payload.completions)) {
@@ -44,8 +47,14 @@ function upgradePayload(payload: LegacyBackupPayload): BackupData {
       ? Object.fromEntries(entry.map((dateStr) => [dateStr, 1]))
       : entry;
   }
-  // Older backups simply had no rest days or challenges.
-  return { habits, completions, skips: payload.skips ?? {}, challenges: payload.challenges ?? [] };
+  // Older backups simply had no rest days, challenges or categories.
+  return {
+    habits,
+    completions,
+    skips: payload.skips ?? {},
+    challenges: payload.challenges ?? [],
+    categories: payload.categories ?? [],
+  };
 }
 
 const BACKUP_FILENAME = 'habit-tracker-backup.json';
@@ -54,7 +63,8 @@ export async function exportBackup(
   habits: Habit[],
   completions: CompletionsMap,
   skips: SkipsMap,
-  challenges: Challenge[]
+  challenges: Challenge[],
+  categories: Category[]
 ): Promise<void> {
   const payload: BackupPayload = {
     version: BACKUP_VERSION,
@@ -63,13 +73,16 @@ export async function exportBackup(
     completions,
     skips,
     challenges,
+    categories,
   };
 
-  const fileUri = `${FileSystem.cacheDirectory}${BACKUP_FILENAME}`;
-  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(payload, null, 2));
+  const file = new File(Paths.cache, BACKUP_FILENAME);
+  // create() throws if the file is already there from a previous export.
+  file.create({ overwrite: true });
+  file.write(JSON.stringify(payload, null, 2));
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Export Habit Tracker Backup' });
+    await Sharing.shareAsync(file.uri, { mimeType: 'application/json', dialogTitle: 'Export Habit Tracker Backup' });
   }
 }
 
@@ -77,7 +90,7 @@ export async function importBackup(): Promise<BackupData | null> {
   const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
   if (result.canceled || !result.assets?.[0]) return null;
 
-  const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
+  const content = await new File(result.assets[0].uri).text();
   const payload = JSON.parse(content) as LegacyBackupPayload;
 
   if (!payload.habits || !payload.completions) {

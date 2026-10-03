@@ -37,6 +37,7 @@ export default function SettingsScreen() {
   const completions = useHabitStore((s) => s.completions);
   const skips = useHabitStore((s) => s.skips);
   const challenges = useHabitStore((s) => s.challenges);
+  const categories = useHabitStore((s) => s.categories);
   const replaceAllData = useHabitStore((s) => s.replaceAllData);
   const clearAllData = useHabitStore((s) => s.clearAllData);
   const setNotificationId = useHabitStore((s) => s.setNotificationId);
@@ -51,7 +52,7 @@ export default function SettingsScreen() {
   async function handleExport() {
     try {
       setBusy(true);
-      await exportBackup(habits, completions, skips, challenges);
+      await exportBackup(habits, completions, skips, challenges, categories);
     } catch (err) {
       Alert.alert('Export failed', err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -73,7 +74,7 @@ export default function SettingsScreen() {
             text: 'Restore',
             style: 'destructive',
             onPress: async () => {
-              replaceAllData(data.habits, data.completions, data.skips, data.challenges);
+              replaceAllData(data);
               // The habits just replaced had their own reminders scheduled, and
               // the restored ones carry ids from whichever device exported them.
               applyReminderUpdates(await resetAllReminders(data.habits));
@@ -137,6 +138,22 @@ export default function SettingsScreen() {
 
       <Text style={[styles.sectionTitle, { color: colors.subtext }]}>HABITS</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow
+          title="Categories"
+          subtitle={
+            categories.length > 0
+              ? `${categories.length} ${categories.length === 1 ? 'category' : 'categories'}`
+              : 'Group habits into sections on Today'
+          }
+          onPress={() => router.push('/categories')}
+          colors={colors}
+        />
+        <SettingsRow
+          title="Reorder Habits"
+          subtitle="Arrange all habits, including ones not due today"
+          onPress={() => router.push('/reorder')}
+          colors={colors}
+        />
         <SettingsRow
           title="Archived Habits"
           subtitle={archivedHabits.length > 0 ? `${archivedHabits.length} archived` : 'No archived habits'}

@@ -1,6 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -41,6 +41,26 @@ export default function NewHabitScreen() {
   const existing = useMemo(() => habits.find((h) => h.id === id), [habits, id]);
 
   const [name, setName] = useState(existing?.name ?? '');
+  const categories = useHabitStore((s) => s.categories);
+  const [categoryId, setCategoryId] = useState<string | null>(existing?.categoryId ?? null);
+
+  // After "+ New" opens the category editor, select whatever category appears
+  // when the user comes back, so they don't have to find and tap it.
+  const awaitingNewCategory = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const before = awaitingNewCategory.current;
+    if (!before) return;
+    const created = categories.find((c) => !before.has(c.id));
+    if (created) {
+      setCategoryId(created.id);
+      awaitingNewCategory.current = null;
+    }
+  }, [categories]);
+
+  function handleNewCategory() {
+    awaitingNewCategory.current = new Set(categories.map((c) => c.id));
+    router.push('/category-edit');
+  }
   const [emoji, setEmoji] = useState(existing?.emoji ?? HABIT_EMOJIS[0]);
   const [color, setColor] = useState(existing?.color ?? HABIT_COLORS[0]);
   const [frequencyKind, setFrequencyKind] = useState<FrequencyKind>(existing?.frequency.type ?? 'daily');
@@ -158,6 +178,8 @@ export default function NewHabitScreen() {
       target: targetValue,
       unit: goalType === 'count' && unit.trim() !== '' ? unit.trim() : null,
       step: stepValue,
+      // A category deleted while this form was open falls back to "Other".
+      categoryId: categories.some((c) => c.id === categoryId) ? categoryId : null,
       reminderTime: reminderTimeStr,
     };
 
@@ -239,6 +261,36 @@ export default function NewHabitScreen() {
         placeholderTextColor={colors.subtext}
         style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
       />
+
+      <Text style={[styles.label, { color: colors.subtext }]}>CATEGORY</Text>
+      <View style={styles.categoryChips}>
+        {[{ id: null, name: 'None', emoji: '' }, ...categories].map((c) => {
+          const selected = c.id === categoryId || (c.id === null && !categories.some((k) => k.id === categoryId));
+          return (
+            <Pressable
+              key={c.id ?? 'none'}
+              onPress={() => setCategoryId(c.id)}
+              style={[
+                styles.categoryChip,
+                {
+                  backgroundColor: selected ? color : colors.card,
+                  borderColor: selected ? color : colors.border,
+                },
+              ]}
+            >
+              <Text style={{ color: selected ? '#fff' : colors.text, fontWeight: '600', fontSize: 13 }}>
+                {c.emoji ? `${c.emoji} ${c.name}` : c.name}
+              </Text>
+            </Pressable>
+          );
+        })}
+        <Pressable
+          onPress={handleNewCategory}
+          style={[styles.categoryChip, styles.newCategoryChip, { borderColor: colors.border }]}
+        >
+          <Text style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>+ New</Text>
+        </Pressable>
+      </View>
 
       <Text style={[styles.label, { color: colors.subtext }]}>ICON</Text>
       <View style={styles.grid}>
@@ -365,8 +417,9 @@ export default function NewHabitScreen() {
                 },
               ]}
             >
+              {/* Full short names: single letters left two T's and two S's. */}
               <Text style={{ color: selectedDays.includes(idx) ? '#fff' : colors.text, fontSize: 12, fontWeight: '600' }}>
-                {label[0]}
+                {label}
               </Text>
             </Pressable>
           ))}
@@ -479,9 +532,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  weekdayRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryChip: { borderWidth: 1, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
+  newCategoryChip: { borderStyle: 'dashed' },
+  weekdayRow: { flexDirection: 'row', gap: 6, marginTop: 16 },
   weekdayPill: {
-    width: 36,
+    flex: 1,
     height: 36,
     borderRadius: 18,
     borderWidth: 1,

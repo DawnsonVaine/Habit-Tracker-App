@@ -120,6 +120,9 @@ export default function RootLayout() {
           options={{ title: 'New Habit', presentation: 'modal' }}
         />
         <Stack.Screen name="archive" options={{ title: 'Archived Habits' }} />
+        <Stack.Screen name="reorder" options={{ title: 'Reorder Habits' }} />
+        <Stack.Screen name="categories" options={{ title: 'Categories' }} />
+        <Stack.Screen name="category-edit" options={{ title: 'Category', presentation: 'modal' }} />
       </Stack>
 
       {/* Lives at the root so it appears wherever the completion happened. Keyed

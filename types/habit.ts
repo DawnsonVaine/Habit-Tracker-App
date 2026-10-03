@@ -11,11 +11,23 @@ export type Frequency =
  */
 export type GoalType = 'binary' | 'count' | 'duration';
 
+/** A user-made grouping, shown as a section on the Today screen. */
+export interface Category {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+/** How habits are ordered within each section on Today. */
+export type SortMode = 'custom' | 'name' | 'streak' | 'todo';
+
 export interface Habit {
   id: string;
   name: string;
   emoji: string;
   color: string;
+  /** null, or an id that no longer exists, files the habit under "Other". */
+  categoryId: string | null;
   frequency: Frequency;
   goalType: GoalType;
   target: number; // 1 for binary, units for count, minutes for duration
