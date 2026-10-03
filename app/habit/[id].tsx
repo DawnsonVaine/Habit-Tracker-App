@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, AlertButton, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MonthGrid } from '../../components/MonthGrid';
 import { ChartDay, ValueChart } from '../../components/ValueChart';
 import { useTheme } from '../../hooks/useTheme';
@@ -13,7 +13,8 @@ import {
   formatDuration,
   formatTarget,
 } from '../../utils/goals';
-import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
+import { canSkipDay, EMPTY_SKIPS } from '../../utils/skips';
+import { getCompletionRate, getStreaks, isDueOnDate, isScheduled } from '../../utils/streaks';
 
 const CHART_DAYS = 30;
 
@@ -24,11 +25,15 @@ export default function HabitDetailScreen() {
 
   const habit = useHabitStore((s) => s.habits.find((h) => h.id === id));
   const progress = useHabitStore((s) => s.completions[id ?? ''] ?? EMPTY_PROGRESS);
+  const skipDates = useHabitStore((s) => s.skips[id ?? ''] ?? EMPTY_SKIPS);
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
+  const setSkipped = useHabitStore((s) => s.setSkipped);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+
+  const skipped = useMemo(() => new Set(skipDates), [skipDates]);
 
   const chart = useMemo(() => {
     if (!habit || habit.goalType === 'binary') return null;
@@ -40,7 +45,8 @@ export default function HabitDetailScreen() {
       const dateStr = addDays(today, -i);
       if (parseDateStr(dateStr) < parseDateStr(habit.createdAt)) continue;
       const value = progress[dateStr] ?? 0;
-      const due = isDueOnDate(habit, dateStr);
+      // Rest days render muted and stay out of the average, like unscheduled days.
+      const due = isScheduled(habit, dateStr, skipped);
       days.push({ date: dateStr, value, due });
       if (due) {
         dueDays++;
@@ -48,7 +54,7 @@ export default function HabitDetailScreen() {
       }
     }
     return { days, average: dueDays === 0 ? 0 : loggedTotal / dueDays };
-  }, [habit, progress]);
+  }, [habit, progress, skipped]);
 
   if (!habit) {
     return (
@@ -58,8 +64,8 @@ export default function HabitDetailScreen() {
     );
   }
 
-  const { current, longest } = getStreaks(habit, progress);
-  const completionRate = getCompletionRate(habit, progress, 30);
+  const { current, longest } = getStreaks(habit, progress, skipped);
+  const completionRate = getCompletionRate(habit, progress, 30, skipped);
   const goalLabel = formatTarget(habit);
   const activeHabit = habit;
 
@@ -73,6 +79,7 @@ export default function HabitDetailScreen() {
     if (!habit) return;
     const habitId = habit.id;
     const isCompleted = dayCredit(habit, progress[dateStr]) >= 1;
+    const isRested = skipped.has(dateStr);
     const d = parseDateStr(dateStr);
     const label = `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}`;
     // Marking a count or duration day from the calendar fills it to the target,
@@ -82,20 +89,45 @@ export default function HabitDetailScreen() {
         ? `Mark ${label} as completed?`
         : `Log the full ${formatTarget(habit)} for ${label}?`;
 
-    Alert.alert(
-      isCompleted ? 'Unmark day' : 'Mark day complete',
-      isCompleted ? `Remove completion for ${label}?` : markMessage,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isCompleted ? 'Unmark' : 'Mark',
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            toggleCompletion(habitId, dateStr);
-          },
+    const buttons: AlertButton[] = [{ text: 'Cancel', style: 'cancel' }];
+    buttons.push({
+      text: isCompleted ? 'Unmark' : 'Mark',
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        toggleCompletion(habitId, dateStr);
+      },
+    });
+
+    // Rest days only apply to days the habit was actually due.
+    if (isRested) {
+      buttons.push({
+        text: 'Undo rest day',
+        onPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setSkipped(habitId, dateStr, false);
         },
-      ]
-    );
+      });
+    } else if (
+      isDueOnDate(habit, dateStr) &&
+      canSkipDay(habit, skipDates, dateStr, progress[dateStr] ?? 0)
+    ) {
+      buttons.push({
+        text: 'Mark as rest day',
+        onPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setSkipped(habitId, dateStr, true);
+        },
+      });
+    }
+
+    let title = isCompleted ? 'Unmark day' : 'Mark day complete';
+    let message = isCompleted ? `Remove completion for ${label}?` : markMessage;
+    if (isRested) {
+      title = `${label} · rest day`;
+      message = 'This day was rested, so it protects your streak and costs no XP.';
+    }
+
+    Alert.alert(title, message, buttons);
   }
 
   function changeMonth(delta: number) {
@@ -187,6 +219,7 @@ export default function HabitDetailScreen() {
           year={year}
           month={month}
           dayCredit={(dateStr) => dayCredit(activeHabit, progress[dateStr])}
+          isRested={(dateStr) => skipped.has(dateStr)}
           color={habit.color}
           createdAt={habit.createdAt}
           onToggleDay={handleToggleDay}

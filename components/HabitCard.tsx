@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
 import { Habit } from '../types/habit';
-import { dayCredit, formatProgress } from '../utils/goals';
+import { dayCredit, formatProgress, withAlpha } from '../utils/goals';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -32,6 +32,10 @@ interface Props {
   onSubtractStep: () => void;
   /** Clears the day's logged value on a count/duration habit. */
   onReset: () => void;
+  /** Today was deliberately rested, so the streak is protected. */
+  skipped: boolean;
+  /** Long-pressing the completion control opens rest-day and reset options. */
+  onOptions: () => void;
   /** Long-pressing the habit's name area starts a drag-to-reorder gesture. */
   onLongPress?: () => void;
 }
@@ -51,7 +55,19 @@ function usePressScale() {
   };
 }
 
-function CheckButton({ color, completed, onPress }: { color: string; completed: boolean; onPress: () => void }) {
+function CheckButton({
+  color,
+  completed,
+  skipped,
+  onPress,
+  onLongPress,
+}: {
+  color: string;
+  completed: boolean;
+  skipped: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+}) {
   const press = usePressScale();
   const fill = useSharedValue(completed ? 1 : 0);
 
@@ -73,12 +89,23 @@ function CheckButton({ color, completed, onPress }: { color: string; completed: 
   return (
     <AnimatedPressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
-      style={[styles.checkbox, { borderColor: color }, press.style]}
+      style={[
+        styles.checkbox,
+        // A rest day fades the ring so it reads as paused rather than missed.
+        { borderColor: skipped && !completed ? withAlpha(color, 0.35) : color },
+        press.style,
+      ]}
     >
       <Animated.View style={[styles.checkboxFill, { backgroundColor: color }, fillStyle]} />
-      <Animated.Text style={[styles.check, tickStyle]}>✓</Animated.Text>
+      {skipped && !completed ? (
+        <Text style={[styles.restMark, { color }]}>–</Text>
+      ) : (
+        <Animated.Text style={[styles.check, tickStyle]}>✓</Animated.Text>
+      )}
     </AnimatedPressable>
   );
 }
@@ -89,12 +116,14 @@ function StepButton({
   completed,
   onAddStep,
   onReset,
+  onOptions,
 }: {
   habit: Habit;
   value: number;
   completed: boolean;
   onAddStep: () => void;
   onReset: () => void;
+  onOptions: () => void;
 }) {
   const press = usePressScale();
   const credit = dayCredit(habit, value);
@@ -118,7 +147,7 @@ function StepButton({
   return (
     <AnimatedPressable
       onPress={completed ? onReset : onAddStep}
-      onLongPress={onReset}
+      onLongPress={onOptions}
       delayLongPress={400}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
@@ -159,45 +188,61 @@ export function HabitCard({
   onAddStep,
   onSubtractStep,
   onReset,
+  skipped,
+  onOptions,
   onLongPress,
 }: Props) {
   const { colors } = useTheme();
   const isBinary = habit.goalType === 'binary';
+  const resting = skipped && !completed;
+  const streakText = streak > 0 ? `🔥 ${streak}` : '';
+
+  let subtitle: string;
+  if (resting) {
+    subtitle = streak > 0 ? `Rest day · 🔥 ${streak} protected` : 'Rest day';
+  } else if (isBinary) {
+    subtitle = streak > 0 ? `🔥 ${streak} day streak` : 'No streak yet';
+  } else {
+    subtitle = `${formatProgress(habit, value)}${streakText ? `  ·  ${streakText}` : ''}`;
+  }
 
   return (
     <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Link href={{ pathname: '/habit/[id]', params: { id: habit.id } }} asChild>
         <Pressable style={styles.info} onLongPress={onLongPress} delayLongPress={220}>
-          <Text style={styles.emoji}>{habit.emoji}</Text>
+          <Text style={[styles.emoji, resting && styles.restingEmoji]}>{habit.emoji}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
               {habit.name}
             </Text>
             <Text style={[styles.streak, { color: colors.subtext }]} numberOfLines={1}>
-              {isBinary
-                ? streak > 0
-                  ? `🔥 ${streak} day streak`
-                  : 'No streak yet'
-                : `${formatProgress(habit, value)}${streak > 0 ? `  ·  🔥 ${streak}` : ''}`}
+              {subtitle}
             </Text>
           </View>
         </Pressable>
       </Link>
 
+      {/* Long-pressing either control opens day options: rest days, and reset
+          for count habits. The card body's long press is drag-to-reorder. */}
       {isBinary ? (
-        <CheckButton color={habit.color} completed={completed} onPress={onToggle} />
+        <CheckButton
+          color={habit.color}
+          completed={completed}
+          skipped={skipped}
+          onPress={onToggle}
+          onLongPress={onOptions}
+        />
       ) : (
         <View style={styles.stepperGroup}>
           {/* Nothing to take away at zero, so the minus only appears once there is. */}
           {value > 0 && <MinusButton color={habit.color} onPress={onSubtractStep} />}
-          {/* Long press clears the day. Reset lives here rather than on the card
-              body, which is already taken by drag-to-reorder. */}
           <StepButton
             habit={habit}
             value={value}
             completed={completed}
             onAddStep={onAddStep}
             onReset={onReset}
+            onOptions={onOptions}
           />
         </View>
       )}
@@ -253,6 +298,14 @@ const styles = StyleSheet.create({
   check: {
     color: '#fff',
     fontWeight: '700',
+  },
+  restMark: {
+    fontSize: 18,
+    fontWeight: '700',
+    opacity: 0.6,
+  },
+  restingEmoji: {
+    opacity: 0.45,
   },
   stepperGroup: {
     flexDirection: 'row',

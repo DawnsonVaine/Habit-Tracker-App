@@ -1,25 +1,36 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { CompletionsMap, Habit, HabitProgress } from '../types/habit';
+import { CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
 
-const BACKUP_VERSION = 2;
+const BACKUP_VERSION = 3;
 
 interface BackupPayload {
   version: number;
   exportedAt: string;
   habits: Habit[];
   completions: CompletionsMap;
+  skips: SkipsMap;
 }
 
-/** Version 1 backups predate goal types and stored completions as date arrays. */
+export interface BackupData {
+  habits: Habit[];
+  completions: CompletionsMap;
+  skips: SkipsMap;
+}
+
+/**
+ * Any backup version, oldest first: v1 predates goal types and stored
+ * completions as date arrays, and v1-v2 predate rest days entirely.
+ */
 interface LegacyBackupPayload {
   version: number;
   habits: (Partial<Habit> & { id: string })[];
   completions: Record<string, string[] | HabitProgress>;
+  skips?: SkipsMap;
 }
 
-function upgradePayload(payload: LegacyBackupPayload): { habits: Habit[]; completions: CompletionsMap } {
+function upgradePayload(payload: LegacyBackupPayload): BackupData {
   const habits = payload.habits.map(
     (habit) => ({ goalType: 'binary', target: 1, unit: null, step: 1, ...habit }) as Habit
   );
@@ -29,17 +40,23 @@ function upgradePayload(payload: LegacyBackupPayload): { habits: Habit[]; comple
       ? Object.fromEntries(entry.map((dateStr) => [dateStr, 1]))
       : entry;
   }
-  return { habits, completions };
+  // Older backups simply had no rest days.
+  return { habits, completions, skips: payload.skips ?? {} };
 }
 
 const BACKUP_FILENAME = 'habit-tracker-backup.json';
 
-export async function exportBackup(habits: Habit[], completions: CompletionsMap): Promise<void> {
+export async function exportBackup(
+  habits: Habit[],
+  completions: CompletionsMap,
+  skips: SkipsMap
+): Promise<void> {
   const payload: BackupPayload = {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     habits,
     completions,
+    skips,
   };
 
   const fileUri = `${FileSystem.cacheDirectory}${BACKUP_FILENAME}`;
@@ -50,7 +67,7 @@ export async function exportBackup(habits: Habit[], completions: CompletionsMap)
   }
 }
 
-export async function importBackup(): Promise<{ habits: Habit[]; completions: CompletionsMap } | null> {
+export async function importBackup(): Promise<BackupData | null> {
   const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
   if (result.canceled || !result.assets?.[0]) return null;
 
@@ -62,6 +79,6 @@ export async function importBackup(): Promise<{ habits: Habit[]; completions: Co
   }
 
   // Older exports are upgraded on the way in, so backups taken before goal
-  // types existed still restore correctly.
+  // types or rest days existed still restore correctly.
   return upgradePayload(payload);
 }

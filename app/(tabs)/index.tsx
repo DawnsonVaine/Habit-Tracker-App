@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, AlertButton, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReorderableList, {
   ReorderableListReorderEvent,
   reorderItems,
@@ -13,6 +13,13 @@ import { useHabitStore } from '../../store/habitStore';
 import { Habit } from '../../types/habit';
 import { todayStr } from '../../utils/dates';
 import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
+import {
+  canSkipDay,
+  canSkipHabit,
+  EMPTY_SKIPS,
+  skipsLeftInWeek,
+  SKIPS_PER_WEEK,
+} from '../../utils/skips';
 import { getStreaks, isDueOnDate } from '../../utils/streaks';
 
 interface DraggableHabitCardProps {
@@ -20,10 +27,12 @@ interface DraggableHabitCardProps {
   completed: boolean;
   streak: number;
   value: number;
+  skipped: boolean;
   onToggle: () => void;
   onAddStep: () => void;
   onSubtractStep: () => void;
   onReset: () => void;
+  onOptions: () => void;
 }
 
 /**
@@ -49,6 +58,8 @@ export default function TodayScreen() {
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
   const addProgress = useHabitStore((s) => s.addProgress);
   const resetProgress = useHabitStore((s) => s.resetProgress);
+  const skips = useHabitStore((s) => s.skips);
+  const setSkipped = useHabitStore((s) => s.setSkipped);
   const reorderHabits = useHabitStore((s) => s.reorderHabits);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
@@ -74,6 +85,50 @@ export default function TodayScreen() {
   function handleReset(habitId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     resetProgress(habitId, today);
+  }
+
+  function setRest(habitId: string, rest: boolean) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSkipped(habitId, today, rest);
+  }
+
+  /** Day options for a habit: take or undo a rest day, and reset count habits. */
+  function handleOptions(habit: Habit, value: number, skipDates: readonly string[]) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const restingToday = skipDates.includes(today);
+    const buttons: AlertButton[] = [];
+
+    if (restingToday) {
+      buttons.push({ text: 'Undo rest day', onPress: () => setRest(habit.id, false) });
+    } else if (canSkipDay(habit, skipDates, today, value)) {
+      buttons.push({ text: 'Take a rest day', onPress: () => setRest(habit.id, true) });
+    }
+    if (habit.goalType !== 'binary' && value > 0) {
+      buttons.push({ text: 'Reset today', style: 'destructive', onPress: () => handleReset(habit.id) });
+    }
+
+    // Nothing to offer: say why, rather than opening an empty menu.
+    if (buttons.length === 0) {
+      let reason: string;
+      if (!canSkipHabit(habit)) {
+        reason = "Times-per-week habits can't take rest days — they're already flexible about which days you do them.";
+      } else if (value > 0) {
+        reason = "You've already logged this today, so there's nothing to rest. Undo it first if you'd like a rest day.";
+      } else {
+        reason = `You've used this week's rest day for ${habit.name}. It resets on Sunday.`;
+      }
+      Alert.alert('No rest day available', reason);
+      return;
+    }
+
+    const left = skipsLeftInWeek(skipDates, today);
+    const message = restingToday
+      ? 'Today is a rest day. Your streak is protected.'
+      : canSkipHabit(habit)
+        ? `${left} of ${SKIPS_PER_WEEK} rest ${SKIPS_PER_WEEK === 1 ? 'day' : 'days'} left this week. A rest day protects your streak and costs no XP.`
+        : undefined;
+
+    Alert.alert(habit.name, message, [...buttons, { text: 'Cancel', style: 'cancel' }]);
   }
 
   // Only today's due habits are on screen, so we hand the store just those ids.
@@ -123,7 +178,8 @@ export default function TodayScreen() {
           onReorder={handleReorder}
           renderItem={({ item }) => {
             const progress = completions[item.id] ?? EMPTY_PROGRESS;
-            const { current } = getStreaks(item, progress);
+            const skipDates = skips[item.id] ?? EMPTY_SKIPS;
+            const { current } = getStreaks(item, progress, new Set(skipDates));
             const value = progress[today] ?? 0;
             return (
               <DraggableHabitCard
@@ -131,10 +187,12 @@ export default function TodayScreen() {
                 completed={isDayComplete(item, value)}
                 streak={current}
                 value={value}
+                skipped={skipDates.includes(today)}
                 onToggle={() => handleToggle(item.id)}
                 onAddStep={() => handleStep(item, 1)}
                 onSubtractStep={() => handleStep(item, -1)}
                 onReset={() => handleReset(item.id)}
+                onOptions={() => handleOptions(item, value, skipDates)}
               />
             );
           }}

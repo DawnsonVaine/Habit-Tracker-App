@@ -1,7 +1,8 @@
-import { CompletionsMap, Habit, HabitProgress } from '../types/habit';
+import { CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
 import { addDays, parseDateStr, startOfWeek, todayStr } from './dates';
 import { dayCredit } from './goals';
-import { isDueOnDate } from './streaks';
+import { EMPTY_SKIP_SET } from './skips';
+import { isScheduled } from './streaks';
 
 /** XP a fully completed day is worth before the completion bonus. */
 const DAILY_XP = 10;
@@ -98,9 +99,13 @@ function weeklyShortfall(habit: Habit, progress: HabitProgress): number {
 /**
  * XP lost to days the habit was due and completely untouched. Partial progress
  * is never penalised — some effort always beats none. Today is excluded since
- * it is still in play.
+ * it is still in play, and deliberately skipped rest days are never missed.
  */
-export function missedPenalty(habit: Habit, progress: HabitProgress): number {
+export function missedPenalty(
+  habit: Habit,
+  progress: HabitProgress,
+  skipped: ReadonlySet<string> = EMPTY_SKIP_SET
+): number {
   // Archived habits are retired: they keep what they earned but stop accruing
   // penalties, so shelving something you've stopped doing isn't punished forever.
   if (habit.archived) return 0;
@@ -115,29 +120,33 @@ export function missedPenalty(habit: Habit, progress: HabitProgress): number {
   let missed = 0;
   let day = habit.createdAt;
   while (parseDateStr(day) <= parseDateStr(yesterday)) {
-    if (isDueOnDate(habit, day) && dayCredit(habit, progress[day]) === 0) missed++;
+    if (isScheduled(habit, day, skipped) && dayCredit(habit, progress[day]) === 0) missed++;
     day = addDays(day, 1);
   }
   return missed * MISSED_PENALTY;
 }
 
 /** Net XP for one habit: everything earned, less what consistency cost. */
-export function xpForHabit(habit: Habit, progress: HabitProgress): number {
+export function xpForHabit(
+  habit: Habit,
+  progress: HabitProgress,
+  skipped: ReadonlySet<string> = EMPTY_SKIP_SET
+): number {
   let earned = 0;
   for (const value of Object.values(progress)) {
     earned += xpForDay(habit, value);
   }
-  return earned - missedPenalty(habit, progress);
+  return earned - missedPenalty(habit, progress, skipped);
 }
 
 /**
  * Lifetime XP across every habit. Archived habits keep the XP they earned —
  * the work was done — but no longer lose any.
  */
-export function getTotalXp(habits: Habit[], completions: CompletionsMap): number {
+export function getTotalXp(habits: Habit[], completions: CompletionsMap, skips: SkipsMap = {}): number {
   let total = 0;
   for (const habit of habits) {
-    total += xpForHabit(habit, completions[habit.id] ?? {});
+    total += xpForHabit(habit, completions[habit.id] ?? {}, new Set(skips[habit.id] ?? []));
   }
   return Math.max(0, total);
 }

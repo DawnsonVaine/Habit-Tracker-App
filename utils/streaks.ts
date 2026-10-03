@@ -1,6 +1,7 @@
 import { Habit, HabitProgress } from '../types/habit';
 import { addDays, getWeekdayIndex, parseDateStr, startOfWeek, todayStr } from './dates';
 import { completedDateSet } from './goals';
+import { EMPTY_SKIP_SET } from './skips';
 
 /** Whether a habit is scheduled to be done on a given date (only meaningful for daily/weekdays types). */
 export function isDueOnDate(habit: Habit, dateStr: string): boolean {
@@ -12,7 +13,19 @@ export function isDueOnDate(habit: Habit, dateStr: string): boolean {
   return true;
 }
 
-function dailyStreak(habit: Habit, completedSet: Set<string>): { current: number; longest: number } {
+/**
+ * Due and not deliberately skipped. A skipped day is treated exactly like one
+ * the habit isn't scheduled on: it neither counts toward a streak nor breaks it.
+ */
+export function isScheduled(habit: Habit, dateStr: string, skipped: ReadonlySet<string>): boolean {
+  return isDueOnDate(habit, dateStr) && !skipped.has(dateStr);
+}
+
+function dailyStreak(
+  habit: Habit,
+  completedSet: Set<string>,
+  skipped: ReadonlySet<string>
+): { current: number; longest: number } {
   const today = todayStr();
   const createdAt = habit.createdAt;
 
@@ -21,7 +34,7 @@ function dailyStreak(habit: Habit, completedSet: Set<string>): { current: number
   let current = 0;
   let cursor = completedSet.has(today) ? today : addDays(today, -1);
   while (parseDateStr(cursor) >= parseDateStr(createdAt)) {
-    if (!isDueOnDate(habit, cursor)) {
+    if (!isScheduled(habit, cursor, skipped)) {
       cursor = addDays(cursor, -1);
       continue;
     }
@@ -38,7 +51,7 @@ function dailyStreak(habit: Habit, completedSet: Set<string>): { current: number
   let running = 0;
   let day = createdAt;
   while (parseDateStr(day) <= parseDateStr(today)) {
-    if (isDueOnDate(habit, day)) {
+    if (isScheduled(habit, day, skipped)) {
       if (completedSet.has(day)) {
         running++;
         longest = Math.max(longest, running);
@@ -92,16 +105,29 @@ function timesPerWeekStreak(habit: Habit, completedSet: Set<string>): { current:
   return { current: running, longest: Math.max(longest, running) };
 }
 
-export function getStreaks(habit: Habit, progress: HabitProgress): { current: number; longest: number } {
+export function getStreaks(
+  habit: Habit,
+  progress: HabitProgress,
+  skipped: ReadonlySet<string> = EMPTY_SKIP_SET
+): { current: number; longest: number } {
   const completedSet = completedDateSet(habit, progress);
   if (habit.frequency.type === 'timesPerWeek') {
     return timesPerWeekStreak(habit, completedSet);
   }
-  return dailyStreak(habit, completedSet);
+  return dailyStreak(habit, completedSet, skipped);
 }
 
-/** Completion percentage over the last `windowDays` days (or since creation if shorter). */
-export function getCompletionRate(habit: Habit, progress: HabitProgress, windowDays = 30): number {
+/**
+ * Completion percentage over the last `windowDays` days (or since creation if
+ * shorter). Skipped days drop out of the denominator, so resting doesn't
+ * drag the rate down.
+ */
+export function getCompletionRate(
+  habit: Habit,
+  progress: HabitProgress,
+  windowDays = 30,
+  skipped: ReadonlySet<string> = EMPTY_SKIP_SET
+): number {
   const completedSet = completedDateSet(habit, progress);
   const today = todayStr();
   const windowStart = addDays(today, -(windowDays - 1));
@@ -111,7 +137,7 @@ export function getCompletionRate(habit: Habit, progress: HabitProgress, windowD
   let done = 0;
   let day = rangeStart;
   while (parseDateStr(day) <= parseDateStr(today)) {
-    if (isDueOnDate(habit, day)) {
+    if (isScheduled(habit, day, skipped)) {
       due++;
       if (completedSet.has(day)) done++;
     }

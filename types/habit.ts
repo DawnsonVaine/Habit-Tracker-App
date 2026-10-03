@@ -34,3 +34,6 @@ export type HabitProgress = Record<string, number>;
 
 // Map of habitId -> that habit's logged values by date.
 export type CompletionsMap = Record<string, HabitProgress>;
+
+// Map of habitId -> dates ("yyyy-mm-dd") deliberately skipped as rest days.
+export type SkipsMap = Record<string, string[]>;

@@ -21,6 +21,8 @@ interface DayCellProps {
   borderColor: string;
   isToday: boolean;
   isDisabled: boolean;
+  /** A deliberate rest day, drawn with a dashed outline. */
+  isRested: boolean;
   onPress: () => void;
 }
 
@@ -32,6 +34,7 @@ function DayCell({
   borderColor,
   isToday,
   isDisabled,
+  isRested,
   onPress,
 }: DayCellProps) {
   const fill = useSharedValue(credit);
@@ -60,7 +63,10 @@ function DayCell({
       style={[
         styles.dayCell,
         styles.dayCellButton,
-        { borderColor, opacity: isDisabled ? 0.3 : 1 },
+        isRested
+          ? { borderColor: color, borderStyle: 'dashed', borderWidth: 1.5 }
+          : { borderColor },
+        { opacity: isDisabled ? 0.3 : 1 },
         containerStyle,
       ]}
     >
@@ -77,12 +83,14 @@ interface Props {
   month: number; // 0-indexed
   /** How far a given day got toward its target, 0..1. 1 means complete. */
   dayCredit: (dateStr: string) => number;
+  /** Whether a day was deliberately rested. */
+  isRested: (dateStr: string) => boolean;
   color: string;
   createdAt: string;
   onToggleDay: (dateStr: string) => void;
 }
 
-export function MonthGrid({ year, month, dayCredit, color, createdAt, onToggleDay }: Props) {
+export function MonthGrid({ year, month, dayCredit, isRested, color, createdAt, onToggleDay }: Props) {
   const { colors } = useTheme();
   const matrix = getMonthMatrix(year, month);
   const today = todayStr();
@@ -118,6 +126,7 @@ export function MonthGrid({ year, month, dayCredit, color, createdAt, onToggleDa
                 borderColor={isToday ? color : colors.border}
                 isToday={isToday}
                 isDisabled={isDisabled}
+                isRested={isRested(dateStr)}
                 onPress={() => onToggleDay(dateStr)}
               />
             );

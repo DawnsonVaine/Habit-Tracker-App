@@ -14,13 +14,14 @@ export default function RootLayout() {
   const setNotificationId = useHabitStore((s) => s.setNotificationId);
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
+  const skips = useHabitStore((s) => s.skips);
   const lastSeenLevel = useHabitStore((s) => s.lastSeenLevel);
   const acknowledgeLevel = useHabitStore((s) => s.acknowledgeLevel);
   const syncedRef = useRef(false);
 
   const level = useMemo(
-    () => getProgression(getTotalXp(habits, completions)).level,
-    [habits, completions]
+    () => getProgression(getTotalXp(habits, completions, skips)).level,
+    [habits, completions, skips]
   );
 
   // Adopt the level silently the first time, and whenever it drops (deleting a

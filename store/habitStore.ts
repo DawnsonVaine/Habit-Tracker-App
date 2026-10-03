@@ -1,12 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { CompletionsMap, Habit, HabitProgress, NewHabitInput } from '../types/habit';
+import { CompletionsMap, Habit, HabitProgress, NewHabitInput, SkipsMap } from '../types/habit';
 import { todayStr } from '../utils/dates';
+import { canSkipDay } from '../utils/skips';
 
 interface HabitState {
   habits: Habit[];
   completions: CompletionsMap;
+  /** Days each habit was deliberately rested, which protect streaks and cost no XP. */
+  skips: SkipsMap;
   /**
    * The level the user has already been shown. null means we have not recorded
    * one yet, in which case the current level is adopted silently rather than
@@ -24,10 +27,16 @@ interface HabitState {
   /** Clears a day's logged value entirely. */
   resetProgress: (habitId: string, dateStr?: string) => void;
   isCompletedOn: (habitId: string, dateStr: string) => boolean;
+  /**
+   * Marks or unmarks a rest day. Returns false if a skip was refused — the
+   * habit can't be skipped, the day already has progress, or the week's
+   * allowance is used up.
+   */
+  setSkipped: (habitId: string, dateStr: string, skipped: boolean) => boolean;
   setNotificationId: (habitId: string, notificationId: string | null) => void;
   setArchived: (id: string, archived: boolean) => void;
   reorderHabits: (orderedIds: string[]) => void;
-  replaceAllData: (habits: Habit[], completions: CompletionsMap) => void;
+  replaceAllData: (habits: Habit[], completions: CompletionsMap, skips?: SkipsMap) => void;
   clearAllData: () => void;
 }
 
@@ -38,7 +47,15 @@ function generateId(): string {
 interface PersistedState {
   habits: Habit[];
   completions: CompletionsMap;
+  skips?: SkipsMap;
   lastSeenLevel?: number | null;
+}
+
+/** Drops one date from a habit's skips. Logging progress on a rest day cancels the rest. */
+function clearSkip(skips: SkipsMap, habitId: string, dateStr: string): SkipsMap {
+  const dates = skips[habitId];
+  if (!dates || !dates.includes(dateStr)) return skips;
+  return { ...skips, [habitId]: dates.filter((d) => d !== dateStr) };
 }
 
 /** Shape written by app versions before goal types existed. */
@@ -74,6 +91,7 @@ export const useHabitStore = create<HabitState>()(
     (set, get) => ({
       habits: [],
       completions: {},
+      skips: {},
       lastSeenLevel: null,
       hasHydrated: false,
 
@@ -102,9 +120,11 @@ export const useHabitStore = create<HabitState>()(
       deleteHabit: (id) => {
         set((state) => {
           const { [id]: _removed, ...rest } = state.completions;
+          const { [id]: _removedSkips, ...restSkips } = state.skips;
           return {
             habits: state.habits.filter((h) => h.id !== id),
             completions: rest,
+            skips: restSkips,
           };
         });
       },
@@ -123,6 +143,7 @@ export const useHabitStore = create<HabitState>()(
               // a count habit from the calendar; clearing drops the day entirely.
               [habitId]: wasComplete ? withoutDay : { ...progress, [dateStr]: habit.target },
             },
+            skips: wasComplete ? state.skips : clearSkip(state.skips, habitId, dateStr),
           };
         });
       },
@@ -139,6 +160,7 @@ export const useHabitStore = create<HabitState>()(
           }
           return {
             completions: { ...state.completions, [habitId]: { ...progress, [dateStr]: next } },
+            skips: clearSkip(state.skips, habitId, dateStr),
           };
         });
       },
@@ -156,6 +178,22 @@ export const useHabitStore = create<HabitState>()(
         const habit = state.habits.find((h) => h.id === habitId);
         if (!habit) return false;
         return (state.completions[habitId]?.[dateStr] ?? 0) >= habit.target;
+      },
+
+      setSkipped: (habitId, dateStr, skipped) => {
+        const state = get();
+        if (!skipped) {
+          set({ skips: clearSkip(state.skips, habitId, dateStr) });
+          return true;
+        }
+        const habit = state.habits.find((h) => h.id === habitId);
+        if (!habit) return false;
+        const dates = state.skips[habitId] ?? [];
+        const logged = state.completions[habitId]?.[dateStr] ?? 0;
+        // Enforced here as well as in the UI, so the allowance can't be bypassed.
+        if (!canSkipDay(habit, dates, dateStr, logged)) return false;
+        set({ skips: { ...state.skips, [habitId]: [...dates, dateStr].sort() } });
+        return true;
       },
 
       setNotificationId: (habitId, notificationId) => {
@@ -191,12 +229,12 @@ export const useHabitStore = create<HabitState>()(
 
       // Both of these change lifetime XP wholesale, so forget the last seen
       // level and adopt whatever the new data implies without celebrating it.
-      replaceAllData: (habits, completions) => {
-        set({ habits, completions, lastSeenLevel: null });
+      replaceAllData: (habits, completions, skips = {}) => {
+        set({ habits, completions, skips, lastSeenLevel: null });
       },
 
       clearAllData: () => {
-        set({ habits: [], completions: {}, lastSeenLevel: null });
+        set({ habits: [], completions: {}, skips: {}, lastSeenLevel: null });
       },
     }),
     {
@@ -205,6 +243,7 @@ export const useHabitStore = create<HabitState>()(
       partialize: (state) => ({
         habits: state.habits,
         completions: state.completions,
+        skips: state.skips,
         lastSeenLevel: state.lastSeenLevel,
       }),
       version: 1,

@@ -7,7 +7,8 @@ import { useHabitStore } from '../../store/habitStore';
 import { addDays, parseDateStr, startOfWeek, todayStr } from '../../utils/dates';
 import { dayCredit, EMPTY_PROGRESS } from '../../utils/goals';
 import { getProgression, getTotalXp } from '../../utils/progression';
-import { getCompletionRate, getStreaks, isDueOnDate } from '../../utils/streaks';
+import { EMPTY_SKIP_SET } from '../../utils/skips';
+import { getCompletionRate, getStreaks, isScheduled } from '../../utils/streaks';
 
 const HEATMAP_WEEKS = 12;
 
@@ -15,30 +16,43 @@ export default function StatsScreen() {
   const { colors } = useTheme();
   const allHabits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
+  const skips = useHabitStore((s) => s.skips);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
   const habits = useMemo(() => allHabits.filter((h) => !h.archived), [allHabits]);
 
+  // Built once per change rather than per lookup, since the heatmap checks
+  // every habit on every day it draws.
+  const skipSets = useMemo(() => {
+    const sets = new Map<string, ReadonlySet<string>>();
+    for (const [habitId, dates] of Object.entries(skips)) sets.set(habitId, new Set(dates));
+    return sets;
+  }, [skips]);
+
   // Every habit counts toward XP, archived included — the work was still done.
   const progression = useMemo(
-    () => getProgression(getTotalXp(allHabits, completions)),
-    [allHabits, completions]
+    () => getProgression(getTotalXp(allHabits, completions, skips)),
+    [allHabits, completions, skips]
   );
 
   const overallRate = useMemo(() => {
     if (habits.length === 0) return 0;
     const total = habits.reduce(
-      (sum, h) => sum + getCompletionRate(h, completions[h.id] ?? EMPTY_PROGRESS, 30),
+      (sum, h) =>
+        sum + getCompletionRate(h, completions[h.id] ?? EMPTY_PROGRESS, 30, skipSets.get(h.id) ?? EMPTY_SKIP_SET),
       0
     );
     return Math.round(total / habits.length);
-  }, [habits, completions]);
+  }, [habits, completions, skipSets]);
 
   const leaderboard = useMemo(() => {
     return habits
-      .map((h) => ({ habit: h, ...getStreaks(h, completions[h.id] ?? EMPTY_PROGRESS) }))
+      .map((h) => ({
+        habit: h,
+        ...getStreaks(h, completions[h.id] ?? EMPTY_PROGRESS, skipSets.get(h.id) ?? EMPTY_SKIP_SET),
+      }))
       .sort((a, b) => b.current - a.current);
-  }, [habits, completions]);
+  }, [habits, completions, skipSets]);
 
   const heatmapWeeks = useMemo(() => {
     const today = todayStr();
@@ -49,7 +63,8 @@ export default function StatsScreen() {
     let cursor = start;
     while (parseDateStr(cursor) <= parseDateStr(today)) {
       const activeHabits = habits.filter((h) => parseDateStr(h.createdAt) <= parseDateStr(cursor));
-      const due = activeHabits.filter((h) => isDueOnDate(h, cursor));
+      // A rested habit drops out of the day entirely, the same as one not scheduled.
+      const due = activeHabits.filter((h) => isScheduled(h, cursor, skipSets.get(h.id) ?? EMPTY_SKIP_SET));
       // Partial credit, so a half-finished count habit shades the day rather
       // than counting for nothing.
       const credit = due.reduce((sum, h) => sum + dayCredit(h, completions[h.id]?.[cursor]), 0);
@@ -62,7 +77,7 @@ export default function StatsScreen() {
       weeks.push(days.slice(i, i + 7));
     }
     return weeks;
-  }, [habits, completions]);
+  }, [habits, completions, skipSets]);
 
   if (!hasHydrated) {
     return <View style={[styles.container, { backgroundColor: colors.background }]} />;
