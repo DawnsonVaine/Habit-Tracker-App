@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { CompletionsMap, Habit, HabitProgress, NewHabitInput, SkipsMap } from '../types/habit';
+import { Challenge, CompletionsMap, Habit, HabitProgress, NewHabitInput, SkipsMap } from '../types/habit';
+import { canChallengeHabit, getChallengeProgress } from '../utils/challenges';
 import { todayStr } from '../utils/dates';
 import { canSkipDay } from '../utils/skips';
 
@@ -10,6 +11,8 @@ interface HabitState {
   completions: CompletionsMap;
   /** Days each habit was deliberately rested, which protect streaks and cost no XP. */
   skips: SkipsMap;
+  /** Every challenge ever started, kept so finished ones still pay their bonus. */
+  challenges: Challenge[];
   /**
    * The level the user has already been shown. null means we have not recorded
    * one yet, in which case the current level is adopted silently rather than
@@ -33,10 +36,19 @@ interface HabitState {
    * allowance is used up.
    */
   setSkipped: (habitId: string, dateStr: string, skipped: boolean) => boolean;
+  /** Starts a challenge from today. Returns null if one is already running for the habit. */
+  startChallenge: (habitId: string, lengthDays: number) => Challenge | null;
+  abandonChallenge: (challengeId: string) => void;
+  markChallengeCelebrated: (challengeId: string) => void;
   setNotificationId: (habitId: string, notificationId: string | null) => void;
   setArchived: (id: string, archived: boolean) => void;
   reorderHabits: (orderedIds: string[]) => void;
-  replaceAllData: (habits: Habit[], completions: CompletionsMap, skips?: SkipsMap) => void;
+  replaceAllData: (
+    habits: Habit[],
+    completions: CompletionsMap,
+    skips?: SkipsMap,
+    challenges?: Challenge[]
+  ) => void;
   clearAllData: () => void;
 }
 
@@ -48,6 +60,7 @@ interface PersistedState {
   habits: Habit[];
   completions: CompletionsMap;
   skips?: SkipsMap;
+  challenges?: Challenge[];
   lastSeenLevel?: number | null;
 }
 
@@ -92,6 +105,7 @@ export const useHabitStore = create<HabitState>()(
       habits: [],
       completions: {},
       skips: {},
+      challenges: [],
       lastSeenLevel: null,
       hasHydrated: false,
 
@@ -125,6 +139,7 @@ export const useHabitStore = create<HabitState>()(
             habits: state.habits.filter((h) => h.id !== id),
             completions: rest,
             skips: restSkips,
+            challenges: state.challenges.filter((c) => c.habitId !== id),
           };
         });
       },
@@ -196,6 +211,45 @@ export const useHabitStore = create<HabitState>()(
         return true;
       },
 
+      startChallenge: (habitId, lengthDays) => {
+        const state = get();
+        const habit = state.habits.find((h) => h.id === habitId);
+        if (!habit || !canChallengeHabit(habit)) return null;
+
+        // One running challenge per habit. Finished ones don't block a new start.
+        const progress = state.completions[habitId] ?? {};
+        const skipped = new Set(state.skips[habitId] ?? []);
+        const running = state.challenges.some(
+          (c) =>
+            c.habitId === habitId &&
+            getChallengeProgress(c, habit, progress, skipped).status === 'active'
+        );
+        if (running) return null;
+
+        const challenge: Challenge = {
+          id: generateId(),
+          habitId,
+          startDate: todayStr(),
+          lengthDays,
+          abandoned: false,
+          celebrated: false,
+        };
+        set({ challenges: [...state.challenges, challenge] });
+        return challenge;
+      },
+
+      abandonChallenge: (challengeId) => {
+        set((state) => ({
+          challenges: state.challenges.map((c) => (c.id === challengeId ? { ...c, abandoned: true } : c)),
+        }));
+      },
+
+      markChallengeCelebrated: (challengeId) => {
+        set((state) => ({
+          challenges: state.challenges.map((c) => (c.id === challengeId ? { ...c, celebrated: true } : c)),
+        }));
+      },
+
       setNotificationId: (habitId, notificationId) => {
         set((state) => ({
           habits: state.habits.map((h) => (h.id === habitId ? { ...h, notificationId } : h)),
@@ -229,12 +283,15 @@ export const useHabitStore = create<HabitState>()(
 
       // Both of these change lifetime XP wholesale, so forget the last seen
       // level and adopt whatever the new data implies without celebrating it.
-      replaceAllData: (habits, completions, skips = {}) => {
-        set({ habits, completions, skips, lastSeenLevel: null });
+      replaceAllData: (habits, completions, skips = {}, challenges = []) => {
+        // Restored challenges were finished on another install; don't replay
+        // celebrations for them here.
+        const settled = challenges.map((c) => ({ ...c, celebrated: true }));
+        set({ habits, completions, skips, challenges: settled, lastSeenLevel: null });
       },
 
       clearAllData: () => {
-        set({ habits: [], completions: {}, skips: {}, lastSeenLevel: null });
+        set({ habits: [], completions: {}, skips: {}, challenges: [], lastSeenLevel: null });
       },
     }),
     {
@@ -244,6 +301,7 @@ export const useHabitStore = create<HabitState>()(
         habits: state.habits,
         completions: state.completions,
         skips: state.skips,
+        challenges: state.challenges,
         lastSeenLevel: state.lastSeenLevel,
       }),
       version: 1,

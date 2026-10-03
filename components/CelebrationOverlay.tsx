@@ -10,14 +10,20 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
-import { Rank } from '../utils/progression';
 
+/**
+ * The one celebratory moment in the app, shared by level-ups and completed
+ * challenges: a badge springs in over expanding rings, then the text settles.
+ */
 interface Props {
   visible: boolean;
-  level: number;
-  rank: Rank;
-  /** True when this level also entered a new tier, which gets extra billing. */
-  isNewTier: boolean;
+  /** The badge, e.g. a tier emblem or a trophy. */
+  emoji: string;
+  /** Small line above the headline, e.g. "Level up!". */
+  heading: string;
+  /** The big line, e.g. "Iron 3". */
+  headline: string;
+  subtitle: string;
   accentColor: string;
   onDismiss: () => void;
 }
@@ -49,7 +55,15 @@ function Ring({ color, delay, size }: { color: string; delay: number; size: numb
   );
 }
 
-export function LevelUpOverlay({ visible, level, rank, isNewTier, accentColor, onDismiss }: Props) {
+export function CelebrationOverlay({
+  visible,
+  emoji,
+  heading,
+  headline,
+  subtitle,
+  accentColor,
+  onDismiss,
+}: Props) {
   const { colors } = useTheme();
 
   const badge = useSharedValue(0);
@@ -86,19 +100,13 @@ export function LevelUpOverlay({ visible, level, rank, isNewTier, accentColor, o
           <View style={styles.badgeArea}>
             <Ring color={accentColor} delay={140} size={120} />
             <Ring color={accentColor} delay={300} size={120} />
-            <Animated.Text style={[styles.badge, badgeStyle]}>{rank.tier.emoji}</Animated.Text>
+            <Animated.Text style={[styles.badge, badgeStyle]}>{emoji}</Animated.Text>
           </View>
 
           <Animated.View style={contentStyle}>
-            <Text style={[styles.heading, { color: colors.text }]}>
-              {isNewTier ? 'New tier!' : 'Level up!'}
-            </Text>
-            <Text style={[styles.level, { color: accentColor }]}>{rank.label}</Text>
-            <Text style={[styles.sub, { color: colors.subtext }]}>
-              {isNewTier
-                ? `You've broken into ${rank.tier.name}. Keep it going.`
-                : `Level ${level} · keep the streak alive.`}
-            </Text>
+            <Text style={[styles.heading, { color: colors.text }]}>{heading}</Text>
+            <Text style={[styles.level, { color: accentColor }]}>{headline}</Text>
+            <Text style={[styles.sub, { color: colors.subtext }]}>{subtitle}</Text>
           </Animated.View>
 
           <Pressable onPress={onDismiss} style={[styles.button, { backgroundColor: accentColor }]}>

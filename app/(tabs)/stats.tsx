@@ -17,6 +17,7 @@ export default function StatsScreen() {
   const allHabits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const skips = useHabitStore((s) => s.skips);
+  const challenges = useHabitStore((s) => s.challenges);
   const hasHydrated = useHabitStore((s) => s.hasHydrated);
 
   const habits = useMemo(() => allHabits.filter((h) => !h.archived), [allHabits]);
@@ -31,8 +32,8 @@ export default function StatsScreen() {
 
   // Every habit counts toward XP, archived included — the work was still done.
   const progression = useMemo(
-    () => getProgression(getTotalXp(allHabits, completions, skips)),
-    [allHabits, completions, skips]
+    () => getProgression(getTotalXp(allHabits, completions, skips, challenges)),
+    [allHabits, completions, skips, challenges]
   );
 
   const overallRate = useMemo(() => {

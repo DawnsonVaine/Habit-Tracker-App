@@ -36,6 +36,7 @@ export default function SettingsScreen() {
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const skips = useHabitStore((s) => s.skips);
+  const challenges = useHabitStore((s) => s.challenges);
   const replaceAllData = useHabitStore((s) => s.replaceAllData);
   const clearAllData = useHabitStore((s) => s.clearAllData);
   const setNotificationId = useHabitStore((s) => s.setNotificationId);
@@ -50,7 +51,7 @@ export default function SettingsScreen() {
   async function handleExport() {
     try {
       setBusy(true);
-      await exportBackup(habits, completions, skips);
+      await exportBackup(habits, completions, skips, challenges);
     } catch (err) {
       Alert.alert('Export failed', err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -72,7 +73,7 @@ export default function SettingsScreen() {
             text: 'Restore',
             style: 'destructive',
             onPress: async () => {
-              replaceAllData(data.habits, data.completions, data.skips);
+              replaceAllData(data.habits, data.completions, data.skips, data.challenges);
               // The habits just replaced had their own reminders scheduled, and
               // the restored ones carry ids from whichever device exported them.
               applyReminderUpdates(await resetAllReminders(data.habits));

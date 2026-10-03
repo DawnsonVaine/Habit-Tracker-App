@@ -1,4 +1,5 @@
-import { CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
+import { Challenge, CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
+import { getChallengeProgress } from './challenges';
 import { addDays, parseDateStr, startOfWeek, todayStr } from './dates';
 import { dayCredit } from './goals';
 import { EMPTY_SKIP_SET } from './skips';
@@ -140,13 +141,31 @@ export function xpForHabit(
 }
 
 /**
- * Lifetime XP across every habit. Archived habits keep the XP they earned —
- * the work was done — but no longer lose any.
+ * Lifetime XP across every habit, plus bonuses for completed challenges.
+ * Archived habits keep the XP they earned — the work was done — but no longer
+ * lose any.
  */
-export function getTotalXp(habits: Habit[], completions: CompletionsMap, skips: SkipsMap = {}): number {
+export function getTotalXp(
+  habits: Habit[],
+  completions: CompletionsMap,
+  skips: SkipsMap = {},
+  challenges: Challenge[] = []
+): number {
+  const habitsById = new Map(habits.map((h) => [h.id, h]));
   let total = 0;
   for (const habit of habits) {
     total += xpForHabit(habit, completions[habit.id] ?? {}, new Set(skips[habit.id] ?? []));
+  }
+  for (const challenge of challenges) {
+    const habit = habitsById.get(challenge.habitId);
+    if (!habit) continue;
+    const result = getChallengeProgress(
+      challenge,
+      habit,
+      completions[habit.id] ?? {},
+      new Set(skips[habit.id] ?? [])
+    );
+    if (result.status === 'completed') total += result.bonusXp;
   }
   return Math.max(0, total);
 }

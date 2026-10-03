@@ -1,9 +1,9 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
+import { Challenge, CompletionsMap, Habit, HabitProgress, SkipsMap } from '../types/habit';
 
-const BACKUP_VERSION = 3;
+const BACKUP_VERSION = 4;
 
 interface BackupPayload {
   version: number;
@@ -11,23 +11,27 @@ interface BackupPayload {
   habits: Habit[];
   completions: CompletionsMap;
   skips: SkipsMap;
+  challenges: Challenge[];
 }
 
 export interface BackupData {
   habits: Habit[];
   completions: CompletionsMap;
   skips: SkipsMap;
+  challenges: Challenge[];
 }
 
 /**
  * Any backup version, oldest first: v1 predates goal types and stored
- * completions as date arrays, and v1-v2 predate rest days entirely.
+ * completions as date arrays, v1-v2 predate rest days, and v1-v3 predate
+ * challenges.
  */
 interface LegacyBackupPayload {
   version: number;
   habits: (Partial<Habit> & { id: string })[];
   completions: Record<string, string[] | HabitProgress>;
   skips?: SkipsMap;
+  challenges?: Challenge[];
 }
 
 function upgradePayload(payload: LegacyBackupPayload): BackupData {
@@ -40,8 +44,8 @@ function upgradePayload(payload: LegacyBackupPayload): BackupData {
       ? Object.fromEntries(entry.map((dateStr) => [dateStr, 1]))
       : entry;
   }
-  // Older backups simply had no rest days.
-  return { habits, completions, skips: payload.skips ?? {} };
+  // Older backups simply had no rest days or challenges.
+  return { habits, completions, skips: payload.skips ?? {}, challenges: payload.challenges ?? [] };
 }
 
 const BACKUP_FILENAME = 'habit-tracker-backup.json';
@@ -49,7 +53,8 @@ const BACKUP_FILENAME = 'habit-tracker-backup.json';
 export async function exportBackup(
   habits: Habit[],
   completions: CompletionsMap,
-  skips: SkipsMap
+  skips: SkipsMap,
+  challenges: Challenge[]
 ): Promise<void> {
   const payload: BackupPayload = {
     version: BACKUP_VERSION,
@@ -57,6 +62,7 @@ export async function exportBackup(
     habits,
     completions,
     skips,
+    challenges,
   };
 
   const fileUri = `${FileSystem.cacheDirectory}${BACKUP_FILENAME}`;

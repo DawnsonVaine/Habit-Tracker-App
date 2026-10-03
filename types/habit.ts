@@ -37,3 +37,19 @@ export type CompletionsMap = Record<string, HabitProgress>;
 
 // Map of habitId -> dates ("yyyy-mm-dd") deliberately skipped as rest days.
 export type SkipsMap = Record<string, string[]>;
+
+/**
+ * A commitment to complete every scheduled day of a habit for a fixed run.
+ * Only the commitment is stored; whether it is active, completed or failed is
+ * worked out from the habit's history.
+ */
+export interface Challenge {
+  id: string;
+  habitId: string;
+  startDate: string; // yyyy-mm-dd, the first day of the run
+  lengthDays: number;
+  /** The user gave up on it. */
+  abandoned: boolean;
+  /** The completion celebration has been shown, so it isn't shown twice. */
+  celebrated: boolean;
+}

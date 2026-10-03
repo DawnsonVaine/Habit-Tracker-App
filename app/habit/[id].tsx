@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Alert, AlertButton, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ChallengeCard, ChallengeView, formatShortDate } from '../../components/ChallengeCard';
 import { MonthGrid } from '../../components/MonthGrid';
 import { ChartDay, ValueChart } from '../../components/ValueChart';
 import { useTheme } from '../../hooks/useTheme';
@@ -13,6 +14,14 @@ import {
   formatDuration,
   formatTarget,
 } from '../../utils/goals';
+import {
+  canChallengeHabit,
+  CHALLENGE_BONUS_PER_SESSION,
+  challengeEndDate,
+  challengeLengthLabel,
+  countSessions,
+  getChallengeProgress,
+} from '../../utils/challenges';
 import { canSkipDay, EMPTY_SKIPS } from '../../utils/skips';
 import { getCompletionRate, getStreaks, isDueOnDate, isScheduled } from '../../utils/streaks';
 
@@ -28,12 +37,29 @@ export default function HabitDetailScreen() {
   const skipDates = useHabitStore((s) => s.skips[id ?? ''] ?? EMPTY_SKIPS);
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
   const setSkipped = useHabitStore((s) => s.setSkipped);
+  const allChallenges = useHabitStore((s) => s.challenges);
+  const startChallenge = useHabitStore((s) => s.startChallenge);
+  const abandonChallenge = useHabitStore((s) => s.abandonChallenge);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
 
   const skipped = useMemo(() => new Set(skipDates), [skipDates]);
+
+  // The running challenge, plus the most recent finished one for a footnote.
+  const challengeViews = useMemo(() => {
+    if (!habit) return { active: null, last: null };
+    let active: ChallengeView | null = null;
+    let last: ChallengeView | null = null;
+    for (const challenge of allChallenges) {
+      if (challenge.habitId !== habit.id) continue;
+      const view = { challenge, result: getChallengeProgress(challenge, habit, progress, skipped) };
+      if (view.result.status === 'active') active = view;
+      else if (!last || challenge.startDate >= last.challenge.startDate) last = view;
+    }
+    return { active, last };
+  }, [allChallenges, habit, progress, skipped]);
 
   const chart = useMemo(() => {
     if (!habit || habit.goalType === 'binary') return null;
@@ -130,6 +156,42 @@ export default function HabitDetailScreen() {
     Alert.alert(title, message, buttons);
   }
 
+  function handleStartChallenge(lengthDays: number) {
+    if (!habit) return;
+    const habitId = habit.id;
+    const start = todayStr();
+    const sessions = countSessions(habit, start, lengthDays);
+    const end = challengeEndDate({ startDate: start, lengthDays });
+
+    Alert.alert(
+      `Start a ${challengeLengthLabel(lengthDays)} challenge?`,
+      `${habit.name} is scheduled ${sessions} times between today and ${formatShortDate(end)}. ` +
+        `Complete every one to earn +${sessions * CHALLENGE_BONUS_PER_SESSION} XP. ` +
+        `Miss one and the challenge ends — rest days still count.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            startChallenge(habitId, lengthDays);
+          },
+        },
+      ]
+    );
+  }
+
+  function handleAbandonChallenge(challengeId: string) {
+    Alert.alert(
+      'Give up this challenge?',
+      "You'll keep all the XP you've earned from completing the habit, but not the challenge bonus.",
+      [
+        { text: 'Keep going', style: 'cancel' },
+        { text: 'Give up', style: 'destructive', onPress: () => abandonChallenge(challengeId) },
+      ]
+    );
+  }
+
   function changeMonth(delta: number) {
     let newMonth = month + delta;
     let newYear = year;
@@ -185,6 +247,16 @@ export default function HabitDetailScreen() {
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Last 30 days</Text>
           </View>
         </View>
+
+        {canChallengeHabit(habit) && (
+          <ChallengeCard
+            habit={habit}
+            active={challengeViews.active}
+            last={challengeViews.last}
+            onStart={handleStartChallenge}
+            onAbandon={handleAbandonChallenge}
+          />
+        )}
 
         {chart && chart.days.length > 0 && (
           <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
