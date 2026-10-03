@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
-import { useTheme } from '../../hooks/useTheme';
+import { StyleSheet, Text } from 'react-native';
+import { font, useTheme } from '../../hooks/useTheme';
 
 function TabIcon({ symbol, focused }: { symbol: string; focused: boolean }) {
-  return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{symbol}</Text>;
+  return <Text style={{ fontSize: 21, opacity: focused ? 1 : 0.45 }}>{symbol}</Text>;
 }
 
 export default function TabsLayout() {
@@ -12,9 +12,14 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.card },
-        headerTintColor: colors.text,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+        // Each tab draws its own large title, so the bar header would duplicate it.
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
+        },
+        tabBarLabelStyle: { ...font.micro },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.subtext,
       }}

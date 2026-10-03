@@ -2,7 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CATEGORY_EMOJIS } from '../constants/habitOptions';
-import { useTheme } from '../hooks/useTheme';
+import { font, radius, space, useTheme } from '../hooks/useTheme';
 import { useHabitStore } from '../store/habitStore';
 import { validateCategoryName } from '../utils/categories';
 
@@ -61,7 +61,7 @@ export default function CategoryEditScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.label, { color: colors.subtext }]}>NAME</Text>
+        <Text style={[styles.label, { color: colors.subtext }]}>Name</Text>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -73,7 +73,7 @@ export default function CategoryEditScreen() {
           style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
         />
 
-        <Text style={[styles.label, { color: colors.subtext }]}>ICON</Text>
+        <Text style={[styles.label, { color: colors.subtext }]}>Icon</Text>
         <View style={styles.grid}>
           {CATEGORY_EMOJIS.map((e) => (
             <Pressable
@@ -83,7 +83,7 @@ export default function CategoryEditScreen() {
                 styles.emojiOption,
                 {
                   backgroundColor: colors.card,
-                  borderColor: emoji === e ? colors.accent : colors.border,
+                  borderColor: emoji === e ? colors.accent : 'transparent',
                 },
               ]}
             >
@@ -97,7 +97,7 @@ export default function CategoryEditScreen() {
         </Pressable>
 
         {existing && (
-          <Pressable style={[styles.deleteButton, { borderColor: colors.danger }]} onPress={handleDelete}>
+          <Pressable style={[styles.deleteButton, { backgroundColor: colors.dangerSoft }]} onPress={handleDelete}>
             <Text style={{ color: colors.danger, fontWeight: '600' }}>Delete Category</Text>
           </Pressable>
         )}
@@ -109,36 +109,34 @@ export default function CategoryEditScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 20, paddingBottom: 60 },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: 28, marginBottom: 10 },
+  label: { ...font.label, marginTop: 28, marginBottom: 10, marginLeft: space.xs },
   input: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     fontSize: 16,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   emojiOption: {
     width: 46,
     height: 46,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emojiText: { fontSize: 22 },
   saveButton: {
-    marginTop: 32,
+    marginTop: space.xxl,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     alignItems: 'center',
   },
-  saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  saveButtonText: { color: '#fff', ...font.headline },
   deleteButton: {
-    marginTop: 12,
+    marginTop: space.md,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     alignItems: 'center',
-    borderWidth: 1,
   },
 });

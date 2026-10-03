@@ -7,13 +7,13 @@ import ReorderableList, {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { STARTER_CATEGORIES } from '../constants/habitOptions';
-import { useTheme } from '../hooks/useTheme';
+import { radius, useTheme } from '../hooks/useTheme';
 import { useHabitStore } from '../store/habitStore';
 import { Category } from '../types/habit';
 
 function CategoryRow({ category, habitCount }: { category: Category; habitCount: number }) {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
   const drag = useReorderableDrag();
 
   return (
@@ -24,7 +24,7 @@ function CategoryRow({ category, habitCount }: { category: Category; habitCount:
         drag();
       }}
       delayLongPress={180}
-      style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.row, card]}
     >
       <Text style={styles.emoji}>{category.emoji}</Text>
       <View style={{ flex: 1 }}>
@@ -68,7 +68,7 @@ export default function CategoriesScreen() {
 
   const starterChips = starters.length > 0 && (
     <View style={styles.starters}>
-      <Text style={[styles.startersLabel, { color: colors.subtext }]}>QUICK ADD</Text>
+      <Text style={[styles.startersLabel, { color: colors.subtext }]}>Quick add</Text>
       <View style={styles.chips}>
         {starters.map((s) => (
           <Pressable
@@ -77,7 +77,7 @@ export default function CategoriesScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               addCategory(s.name, s.emoji);
             }}
-            style={[styles.chip, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.chip, { backgroundColor: colors.fill }]}
           >
             <Text style={{ color: colors.text, fontWeight: '600' }}>
               {s.emoji} {s.name}
@@ -137,8 +137,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: radius.lg,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 10,
@@ -149,12 +148,12 @@ const styles = StyleSheet.create({
   count: { fontSize: 12, marginTop: 2 },
   handle: { fontSize: 22, fontWeight: '600' },
   footer: { marginTop: 10 },
-  newButton: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', alignSelf: 'stretch' },
+  newButton: { paddingVertical: 14, borderRadius: radius.pill, alignItems: 'center', alignSelf: 'stretch' },
   newButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   starters: { marginTop: 24, alignSelf: 'stretch' },
-  startersLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 },
+  startersLabel: { fontSize: 13, fontWeight: '600', marginBottom: 10, marginLeft: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
+  chip: { borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 },
   emptyEmoji: { fontSize: 48 },
   emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 21 },

@@ -2,10 +2,11 @@ import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Heatmap, HeatmapDay } from '../../components/Heatmap';
 import { LevelCard } from '../../components/LevelCard';
-import { useTheme } from '../../hooks/useTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { font, radius, space, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { addDays, parseDateStr, startOfWeek, todayStr } from '../../utils/dates';
-import { dayCredit, EMPTY_PROGRESS } from '../../utils/goals';
+import { dayCredit, EMPTY_PROGRESS, withAlpha } from '../../utils/goals';
 import { getProgression, getTotalXp } from '../../utils/progression';
 import { EMPTY_SKIP_SET } from '../../utils/skips';
 import { getCompletionRate, getStreaks, isScheduled } from '../../utils/streaks';
@@ -13,7 +14,8 @@ import { getCompletionRate, getStreaks, isScheduled } from '../../utils/streaks'
 const HEATMAP_WEEKS = 12;
 
 export default function StatsScreen() {
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
+  const insets = useSafeAreaInsets();
   const allHabits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const skips = useHabitStore((s) => s.skips);
@@ -85,7 +87,10 @@ export default function StatsScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.lg }]}
+    >
       <Text style={[styles.title, { color: colors.text }]}>Stats</Text>
 
       {habits.length === 0 ? (
@@ -96,32 +101,41 @@ export default function StatsScreen() {
         <>
           <LevelCard progression={progression} accentColor={colors.accent} />
 
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.bigNumber, { color: colors.accent }]}>{overallRate}%</Text>
-            <Text style={[styles.cardLabel, { color: colors.subtext }]}>Overall completion (last 30 days)</Text>
+          <View style={[styles.card, card]}>
+            <Text style={[styles.cardLabel, { color: colors.subtext }]}>Overall completion</Text>
+            <Text style={[styles.bigNumber, { color: colors.text }]}>
+              {overallRate}
+              <Text style={[styles.bigNumberUnit, { color: colors.subtext }]}>%</Text>
+            </Text>
+            <Text style={[styles.cardCaption, { color: colors.muted }]}>Last 30 days</Text>
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity</Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.card, card]}>
             <Heatmap weeks={heatmapWeeks} accentColor={colors.accent} />
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Streaks</Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.card, styles.listCard, card]}>
             {leaderboard.map(({ habit, current, longest }, idx) => (
               <View
                 key={habit.id}
                 style={[
                   styles.leaderRow,
-                  idx < leaderboard.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                  idx < leaderboard.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  },
                 ]}
               >
-                <Text style={styles.leaderEmoji}>{habit.emoji}</Text>
+                <View style={[styles.leaderTile, { backgroundColor: withAlpha(habit.color, 0.13) }]}>
+                  <Text style={styles.leaderEmoji}>{habit.emoji}</Text>
+                </View>
                 <Text style={[styles.leaderName, { color: colors.text }]} numberOfLines={1}>
                   {habit.name}
                 </Text>
-                <Text style={[styles.leaderStreak, { color: habit.color }]}>🔥 {current}</Text>
-                <Text style={[styles.leaderLongest, { color: colors.subtext }]}>best {longest}</Text>
+                <Text style={[styles.leaderStreak, { color: colors.text }]}>🔥 {current}</Text>
+                <Text style={[styles.leaderLongest, { color: colors.muted }]}>best {longest}</Text>
               </View>
             ))}
           </View>
@@ -133,26 +147,36 @@ export default function StatsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 60 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 16 },
-  emptyText: { fontSize: 15, marginTop: 20 },
+  content: { paddingHorizontal: space.xl, paddingBottom: 60 },
+  title: { ...font.largeTitle, marginBottom: space.xl },
+  emptyText: { ...font.body, marginTop: space.xl },
   card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.xl + 4,
   },
-  bigNumber: { fontSize: 36, fontWeight: '800', textAlign: 'center' },
-  cardLabel: { fontSize: 13, textAlign: 'center', marginTop: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  // Rows run edge to edge so their separators reach the card's sides.
+  listCard: { paddingVertical: space.xs, paddingHorizontal: space.lg },
+  cardLabel: { ...font.label },
+  bigNumber: { fontSize: 40, fontWeight: '700', letterSpacing: -1, marginTop: space.xs },
+  bigNumberUnit: { fontSize: 22, fontWeight: '600' },
+  cardCaption: { ...font.caption, marginTop: 2 },
+  sectionTitle: { ...font.headline, marginBottom: space.md, marginLeft: space.xs },
   leaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    gap: 8,
+    paddingVertical: space.md,
+    gap: space.md,
   },
-  leaderEmoji: { fontSize: 20 },
-  leaderName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  leaderStreak: { fontSize: 14, fontWeight: '700' },
-  leaderLongest: { fontSize: 12, minWidth: 56, textAlign: 'right' },
+  leaderTile: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaderEmoji: { fontSize: 18 },
+  leaderName: { flex: 1, ...font.body, fontWeight: '600' },
+  leaderStreak: { ...font.label },
+  leaderLongest: { ...font.caption, minWidth: 52, textAlign: 'right' },
 });

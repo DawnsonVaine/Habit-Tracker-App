@@ -5,7 +5,7 @@ import { Alert, AlertButton, Pressable, ScrollView, StyleSheet, Text, View } fro
 import { ChallengeCard, ChallengeView, formatShortDate } from '../../components/ChallengeCard';
 import { MonthGrid } from '../../components/MonthGrid';
 import { ChartDay, ValueChart } from '../../components/ValueChart';
-import { useTheme } from '../../hooks/useTheme';
+import { radius, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { addDays, MONTH_LABELS, parseDateStr, todayStr } from '../../utils/dates';
 import {
@@ -30,7 +30,7 @@ const CHART_DAYS = 30;
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
 
   const habit = useHabitStore((s) => s.habits.find((h) => h.id === id));
   const progress = useHabitStore((s) => s.completions[id ?? ''] ?? EMPTY_PROGRESS);
@@ -234,15 +234,15 @@ export default function HabitDetailScreen() {
         </View>
 
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, card]}>
             <Text style={[styles.statValue, { color: habit.color }]}>🔥 {current}</Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Current streak</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, card]}>
             <Text style={[styles.statValue, { color: habit.color }]}>🏆 {longest}</Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Longest streak</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, card]}>
             <Text style={[styles.statValue, { color: habit.color }]}>{completionRate}%</Text>
             <Text style={[styles.statLabel, { color: colors.subtext }]}>Last 30 days</Text>
           </View>
@@ -259,7 +259,7 @@ export default function HabitDetailScreen() {
         )}
 
         {chart && chart.days.length > 0 && (
-          <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.chartCard, card]}>
             <View style={styles.chartHeader}>
               <Text style={[styles.chartTitle, { color: colors.text }]}>Last {chart.days.length} days</Text>
               <Text style={[styles.chartAverage, { color: colors.subtext }]}>
@@ -313,8 +313,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
   statCard: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
     gap: 4,
@@ -322,8 +321,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   chartCard: {
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     padding: 16,
     marginBottom: 24,
   },

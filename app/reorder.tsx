@@ -9,7 +9,7 @@ import {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { WEEKDAY_SHORT } from '../constants/habitOptions';
-import { useTheme } from '../hooks/useTheme';
+import { radius, useTheme } from '../hooks/useTheme';
 import { useHabitStore } from '../store/habitStore';
 import { Habit } from '../types/habit';
 import { groupByCategory } from '../utils/categories';
@@ -23,7 +23,7 @@ function scheduleLabel(habit: Habit): string {
 }
 
 function ReorderRow({ habit }: { habit: Habit }) {
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
   const drag = useReorderableDrag();
 
   return (
@@ -33,7 +33,7 @@ function ReorderRow({ habit }: { habit: Habit }) {
         drag();
       }}
       delayLongPress={180}
-      style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.row, card]}
     >
       <Text style={styles.emoji}>{habit.emoji}</Text>
       <View style={{ flex: 1 }}>
@@ -88,7 +88,7 @@ export default function ReorderScreen() {
               {section.title && (
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
                   {section.emoji ? `${section.emoji} ` : ''}
-                  {section.title.toUpperCase()}
+                  {section.title}
                 </Text>
               )}
               <NestedReorderableList
@@ -112,12 +112,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { padding: 20 },
   hint: { fontSize: 13, marginBottom: 14, lineHeight: 18 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginTop: 8, marginBottom: 8 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', marginTop: 12, marginBottom: 10, marginLeft: 4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: radius.lg,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 10,

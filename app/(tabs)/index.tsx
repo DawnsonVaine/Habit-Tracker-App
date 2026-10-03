@@ -10,13 +10,16 @@ import {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { HabitCard } from '../../components/HabitCard';
-import { useTheme } from '../../hooks/useTheme';
+import { LevelStrip } from '../../components/LevelStrip';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { font, radius, space, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { Habit, SortMode } from '../../types/habit';
 import { todayStr } from '../../utils/dates';
 import { groupByCategory, SORT_MODE_LABELS, sortHabits } from '../../utils/categories';
 import { getChallengeProgress } from '../../utils/challenges';
 import { EMPTY_PROGRESS, isDayComplete } from '../../utils/goals';
+import { getProgression, getTotalXp } from '../../utils/progression';
 import {
   canSkipDay,
   canSkipHabit,
@@ -62,6 +65,7 @@ function DraggableHabitCard({ habit, draggable, ...cardProps }: DraggableHabitCa
 export default function TodayScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const toggleCompletion = useHabitStore((s) => s.toggleCompletion);
@@ -80,6 +84,12 @@ export default function TodayScreen() {
   const todayLabel = useMemo(
     () => new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
     []
+  );
+
+  // Archived habits count toward XP too, matching Stats and the level-up check.
+  const progression = useMemo(
+    () => getProgression(getTotalXp(habits, completions, skips, challenges)),
+    [challenges, completions, habits, skips]
   );
 
   const activeHabits = useMemo(() => habits.filter((h) => !h.archived), [habits]);
@@ -229,40 +239,53 @@ export default function TodayScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.text }]}>Today</Text>
-          <Text style={[styles.subtitle, { color: colors.subtext }]}>{todayLabel}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          {dueHabits.length > 1 && (
-            <Pressable onPress={handleSortPress} hitSlop={8} style={styles.sortButton}>
-              <Text style={[styles.sortButtonText, { color: colors.accent }]}>
-                ⇅ {SORT_MODE_LABELS[sortMode]}
-              </Text>
+        <View style={styles.titleRow}>
+          <View>
+            <Text style={[styles.title, { color: colors.text }]}>Today</Text>
+            <Text style={[styles.subtitle, { color: colors.subtext }]}>{todayLabel}</Text>
+          </View>
+          <View style={styles.headerActions}>
+            {dueHabits.length > 1 && (
+              <Pressable
+                onPress={handleSortPress}
+                hitSlop={6}
+                style={[styles.pill, { backgroundColor: colors.fill }]}
+              >
+                <Text style={[styles.pillText, { color: colors.text }]}>⇅ {SORT_MODE_LABELS[sortMode]}</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={[styles.pill, { backgroundColor: colors.accent }]}
+              onPress={() => router.push('/habit/new')}
+            >
+              <Text style={[styles.pillText, { color: '#fff' }]}>+ Habit</Text>
             </Pressable>
-          )}
-          <Pressable
-            style={[styles.addButton, { backgroundColor: colors.accent }]}
-            onPress={() => router.push('/habit/new')}
-          >
-            <Text style={styles.addButtonText}>+ Habit</Text>
-          </Pressable>
+          </View>
         </View>
+        {habits.length > 0 && (
+          <LevelStrip progression={progression} onPress={() => router.push('/stats')} />
+        )}
       </View>
 
       {activeHabits.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🌱</Text>
+          <View style={[styles.emptyBadge, { backgroundColor: colors.accentSoft }]}>
+            <Text style={styles.emptyEmoji}>🌱</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Start your first habit</Text>
           <Text style={[styles.emptyText, { color: colors.subtext }]}>
-            No habits yet. Tap '+ Habit' to create your first one.
+            Tap + Habit to add something you'd like to do every day.
           </Text>
         </View>
       ) : dueHabits.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🌱</Text>
-          <Text style={[styles.emptyText, { color: colors.subtext }]}>Nothing due today. Enjoy the break!</Text>
+          <View style={[styles.emptyBadge, { backgroundColor: colors.accentSoft }]}>
+            <Text style={styles.emptyEmoji}>☀️</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing due today</Text>
+          <Text style={[styles.emptyText, { color: colors.subtext }]}>Enjoy the break.</Text>
         </View>
       ) : (
         <ScrollViewContainer contentContainerStyle={styles.list}>
@@ -276,15 +299,14 @@ export default function TodayScreen() {
             return (
               <View key={section.key}>
                 {section.title && (
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-                      {section.emoji ? `${section.emoji} ` : ''}
-                      {section.title.toUpperCase()}
-                    </Text>
-                    <Text style={[styles.sectionCount, { color: colors.subtext }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
+                    {section.emoji ? `${section.emoji}  ` : ''}
+                    {section.title}
+                    <Text style={{ color: colors.muted }}>
+                      {'  ·  '}
                       {doneCount}/{section.habits.length}
                     </Text>
-                  </View>
+                  </Text>
                 )}
                 <NestedReorderableList
                   data={section.habits}
@@ -328,42 +350,44 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+    gap: space.lg,
+  },
+  titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
   },
-  title: { fontSize: 28, fontWeight: '700' },
-  subtitle: { fontSize: 14, marginTop: 2 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  addButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+  title: { ...font.largeTitle },
+  subtitle: { ...font.caption, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs },
+  pill: {
+    paddingHorizontal: space.md + 2,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
   },
-  addButtonText: { color: '#fff', fontWeight: '600' },
-  sortButton: { paddingVertical: 8, paddingHorizontal: 2 },
-  sortButtonText: { fontSize: 14, fontWeight: '600' },
-  sortHint: { fontSize: 12, marginBottom: 10 },
-  list: { paddingHorizontal: 20, paddingBottom: 24 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
-  sectionCount: { fontSize: 12, fontWeight: '600' },
+  pillText: { ...font.label },
+  sortHint: { ...font.caption, marginBottom: space.md },
+  list: { paddingHorizontal: space.xl, paddingTop: space.xs, paddingBottom: space.xxl },
+  sectionTitle: { ...font.label, marginTop: space.md, marginBottom: space.sm + 2, marginLeft: space.xs },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
-    gap: 12,
+    gap: space.sm,
   },
-  emptyEmoji: { fontSize: 48 },
-  emptyText: { fontSize: 15, textAlign: 'center' },
+  emptyBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.sm,
+  },
+  emptyTitle: { ...font.headline },
+  emptyEmoji: { fontSize: 38 },
+  emptyText: { ...font.body, textAlign: 'center', lineHeight: 21 },
 });

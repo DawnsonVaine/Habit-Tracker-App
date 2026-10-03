@@ -9,7 +9,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { useTheme } from '../hooks/useTheme';
+import { radius, useTheme } from '../hooks/useTheme';
 
 /**
  * The one celebratory moment in the app, shared by level-ups and completed
@@ -64,7 +64,7 @@ export function CelebrationOverlay({
   accentColor,
   onDismiss,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
 
   const badge = useSharedValue(0);
   const content = useSharedValue(0);
@@ -96,7 +96,7 @@ export function CelebrationOverlay({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <Pressable style={styles.backdrop} onPress={onDismiss}>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, card]}>
           <View style={styles.badgeArea}>
             <Ring color={accentColor} delay={140} size={120} />
             <Ring color={accentColor} delay={300} size={120} />
@@ -129,8 +129,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 340,
-    borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: radius.xl,
     paddingVertical: 28,
     paddingHorizontal: 24,
     alignItems: 'center',

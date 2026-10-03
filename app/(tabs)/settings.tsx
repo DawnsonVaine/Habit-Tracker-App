@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../hooks/useTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { font, radius, space, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { exportBackup, importBackup } from '../../utils/backup';
 import { cancelAllReminders, resetAllReminders } from '../../utils/notifications';
@@ -20,19 +21,27 @@ function SettingsRow({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.row, !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{title}</Text>
-        {subtitle && <Text style={{ color: colors.subtext, fontSize: 13, marginTop: 2 }}>{subtitle}</Text>}
+        <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
+        {subtitle && <Text style={[styles.rowSubtitle, { color: colors.subtext }]}>{subtitle}</Text>}
       </View>
-      <Text style={{ color: colors.subtext, fontSize: 18 }}>›</Text>
+      <Text style={[styles.chevron, { color: colors.muted }]}>›</Text>
     </Pressable>
   );
 }
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
+  const insets = useSafeAreaInsets();
   const habits = useHabitStore((s) => s.habits);
   const completions = useHabitStore((s) => s.completions);
   const skips = useHabitStore((s) => s.skips);
@@ -109,18 +118,21 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.lg }]}
+    >
       <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>APPEARANCE</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={{ color: colors.text, fontSize: 15 }}>
-          Follows your iPhone's system Light/Dark mode setting automatically.
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Appearance</Text>
+      <View style={[styles.card, card]}>
+        <Text style={[styles.cardText, { color: colors.text }]}>
+          Follows your iPhone's light and dark mode setting automatically.
         </Text>
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>BACKUP</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Backup</Text>
+      <View style={[styles.card, card]}>
         <SettingsRow
           title="Export Backup"
           subtitle="Save all habits & history as a JSON file"
@@ -136,8 +148,8 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>HABITS</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Habits</Text>
+      <View style={[styles.card, card]}>
         <SettingsRow
           title="Categories"
           subtitle={
@@ -163,42 +175,49 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>DATA</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Pressable onPress={handleClearData} style={styles.dangerRow}>
-          <Text style={{ color: colors.danger, fontSize: 16, fontWeight: '600' }}>Delete All Data</Text>
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Data</Text>
+      <View style={[styles.card, card]}>
+        <Pressable
+          onPress={handleClearData}
+          style={({ pressed }) => [styles.dangerRow, pressed && styles.pressed]}
+        >
+          <Text style={[styles.rowTitle, { color: colors.danger }]}>Delete All Data</Text>
         </Pressable>
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>ABOUT</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={{ color: colors.text, fontSize: 15 }}>
+      <Text style={[styles.sectionTitle, { color: colors.subtext }]}>About</Text>
+      <View style={[styles.card, card]}>
+        <Text style={[styles.cardText, { color: colors.text }]}>
           All your data is stored only on this device. There is no account, no cloud sync, and no tracking.
         </Text>
       </View>
 
-      {busy && <Text style={{ color: colors.subtext, textAlign: 'center', marginTop: 10 }}>Working…</Text>}
+      {busy && <Text style={[styles.busy, { color: colors.subtext }]}>Working…</Text>}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 60 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 20 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 },
+  content: { paddingHorizontal: space.xl, paddingBottom: 60 },
+  title: { ...font.largeTitle, marginBottom: space.xl },
+  sectionTitle: { ...font.label, marginBottom: space.sm, marginLeft: space.xs },
+  // No overflow: 'hidden' here: on iOS it would clip the card's shadow.
   card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    marginBottom: 20,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    marginBottom: space.xl + 4,
+    paddingHorizontal: space.lg,
   },
+  cardText: { ...font.body, lineHeight: 21, paddingVertical: space.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
+    paddingVertical: space.md + 2,
   },
-  dangerRow: { paddingVertical: 14, alignItems: 'center' },
+  rowTitle: { ...font.headline },
+  rowSubtitle: { ...font.caption, marginTop: 2 },
+  chevron: { fontSize: 22, marginLeft: space.sm },
+  pressed: { opacity: 0.6 },
+  dangerRow: { paddingVertical: space.md + 2, alignItems: 'center' },
+  busy: { ...font.caption, textAlign: 'center', marginTop: space.sm },
 });

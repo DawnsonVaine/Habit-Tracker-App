@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { HABIT_COLORS, HABIT_EMOJIS, WEEKDAY_SHORT } from '../../constants/habitOptions';
-import { useTheme } from '../../hooks/useTheme';
+import { font, radius, space, useTheme } from '../../hooks/useTheme';
 import { useHabitStore } from '../../store/habitStore';
 import { Frequency, GoalType, NewHabitInput } from '../../types/habit';
 import {
@@ -253,7 +253,7 @@ export default function NewHabitScreen() {
     <>
       <Stack.Screen options={{ title: isEditing ? (existing?.name ?? 'Edit Habit') : 'New Habit' }} />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
-        <Text style={[styles.label, { color: colors.subtext }]}>NAME</Text>
+        <Text style={[styles.label, { color: colors.subtext }]}>Name</Text>
       <TextInput
         value={name}
         onChangeText={setName}
@@ -262,7 +262,7 @@ export default function NewHabitScreen() {
         style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
       />
 
-      <Text style={[styles.label, { color: colors.subtext }]}>CATEGORY</Text>
+      <Text style={[styles.label, { color: colors.subtext }]}>Category</Text>
       <View style={styles.categoryChips}>
         {[{ id: null, name: 'None', emoji: '' }, ...categories].map((c) => {
           const selected = c.id === categoryId || (c.id === null && !categories.some((k) => k.id === categoryId));
@@ -292,7 +292,7 @@ export default function NewHabitScreen() {
         </Pressable>
       </View>
 
-      <Text style={[styles.label, { color: colors.subtext }]}>ICON</Text>
+      <Text style={[styles.label, { color: colors.subtext }]}>Icon</Text>
       <View style={styles.grid}>
         {HABIT_EMOJIS.map((e) => (
           <Pressable
@@ -300,7 +300,7 @@ export default function NewHabitScreen() {
             onPress={() => setEmoji(e)}
             style={[
               styles.emojiOption,
-              { borderColor: e === emoji ? color : colors.border, backgroundColor: colors.card },
+              { borderColor: e === emoji ? color : 'transparent', backgroundColor: colors.card },
             ]}
           >
             <Text style={styles.emojiText}>{e}</Text>
@@ -308,7 +308,7 @@ export default function NewHabitScreen() {
         ))}
       </View>
 
-      <Text style={[styles.label, { color: colors.subtext }]}>COLOR</Text>
+      <Text style={[styles.label, { color: colors.subtext }]}>Color</Text>
       <View style={styles.grid}>
         {HABIT_COLORS.map((c) => (
           <Pressable
@@ -322,7 +322,7 @@ export default function NewHabitScreen() {
         ))}
       </View>
 
-      <Text style={[styles.label, { color: colors.subtext }]}>GOAL</Text>
+      <Text style={[styles.label, { color: colors.subtext }]}>Goal</Text>
       <View style={styles.segmented}>
         {(['binary', 'count', 'duration'] as GoalType[]).map((kind) => (
           <Pressable
@@ -382,7 +382,7 @@ export default function NewHabitScreen() {
         />
       )}
 
-      <Text style={[styles.label, { color: colors.subtext }]}>FREQUENCY</Text>
+      <Text style={[styles.label, { color: colors.subtext }]}>Frequency</Text>
       <View style={styles.segmented}>
         {(['daily', 'weekdays', 'timesPerWeek'] as FrequencyKind[]).map((kind) => (
           <Pressable
@@ -430,14 +430,14 @@ export default function NewHabitScreen() {
         <View style={styles.stepperRow}>
           <Pressable
             onPress={() => setTimesPerWeek((n) => Math.max(1, n - 1))}
-            style={[styles.stepperButton, { borderColor: colors.border }]}
+            style={[styles.stepperButton, { backgroundColor: colors.card }]}
           >
             <Text style={[styles.stepperText, { color: colors.text }]}>−</Text>
           </Pressable>
           <Text style={[styles.stepperValue, { color: colors.text }]}>{timesPerWeek}x per week</Text>
           <Pressable
             onPress={() => setTimesPerWeek((n) => Math.min(7, n + 1))}
-            style={[styles.stepperButton, { borderColor: colors.border }]}
+            style={[styles.stepperButton, { backgroundColor: colors.card }]}
           >
             <Text style={[styles.stepperText, { color: colors.text }]}>+</Text>
           </Pressable>
@@ -445,7 +445,7 @@ export default function NewHabitScreen() {
       )}
 
       <View style={[styles.reminderRow, { borderColor: colors.border }]}>
-        <Text style={[styles.label, { color: colors.subtext, marginTop: 0 }]}>REMINDER</Text>
+        <Text style={[styles.label, { color: colors.subtext, marginTop: 0 }]}>Reminder</Text>
         <Switch value={reminderEnabled} onValueChange={handleReminderToggle} />
       </View>
 
@@ -485,7 +485,7 @@ export default function NewHabitScreen() {
       </Pressable>
 
       {isEditing && (
-        <Pressable style={[styles.archiveButton, { borderColor: colors.border }]} onPress={handleArchiveToggle}>
+        <Pressable style={[styles.archiveButton, { backgroundColor: colors.fill }]} onPress={handleArchiveToggle}>
           <Text style={{ color: colors.text, fontWeight: '600' }}>
             {existing?.archived ? 'Unarchive Habit' : 'Archive Habit'}
           </Text>
@@ -493,7 +493,7 @@ export default function NewHabitScreen() {
       )}
 
       {isEditing && (
-        <Pressable style={[styles.deleteButton, { borderColor: colors.danger }]} onPress={handleDelete}>
+        <Pressable style={[styles.deleteButton, { backgroundColor: colors.dangerSoft }]} onPress={handleDelete}>
           <Text style={{ color: colors.danger, fontWeight: '600' }}>Delete Habit</Text>
         </Pressable>
       )}
@@ -504,100 +504,95 @@ export default function NewHabitScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 60 },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: 28, marginBottom: 10 },
+  content: { padding: space.xl, paddingBottom: 60 },
+  label: { ...font.label, marginTop: 28, marginBottom: 10, marginLeft: space.xs },
   input: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     fontSize: 16,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  // The ring is how the chosen emoji is shown, so it keeps its border.
   emojiOption: {
     width: 46,
     height: 46,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emojiText: { fontSize: 22 },
   colorOption: { width: 36, height: 36, borderRadius: 18 },
-  segmented: { flexDirection: 'row', gap: 8 },
+  segmented: { flexDirection: 'row', gap: space.sm },
   segment: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
+    borderRadius: radius.sm,
+    paddingVertical: 11,
     alignItems: 'center',
   },
-  categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoryChip: { borderWidth: 1, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
-  newCategoryChip: { borderStyle: 'dashed' },
-  weekdayRow: { flexDirection: 'row', gap: 6, marginTop: 16 },
+  categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  categoryChip: { borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
+  // The dashed outline marks "+ New" as an action rather than a choice.
+  newCategoryChip: { borderStyle: 'dashed', borderWidth: 1 },
+  weekdayRow: { flexDirection: 'row', gap: 6, marginTop: space.lg },
   weekdayPill: {
     flex: 1,
     height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 16 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: space.lg },
   stepperButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperText: { fontSize: 20, fontWeight: '600' },
-  stepperValue: { fontSize: 16, fontWeight: '600', minWidth: 110, textAlign: 'center' },
+  stepperValue: { ...font.headline, minWidth: 110, textAlign: 'center' },
   reminderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: space.sm,
   },
   timeButton: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: radius.md,
+    paddingVertical: 13,
     alignItems: 'center',
     marginTop: 14,
   },
   permissionWarning: {
-    marginTop: 12,
+    marginTop: space.md,
   },
   goalFields: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    gap: space.md,
+    marginTop: space.lg,
   },
   goalField: { flex: 1 },
-  goalFieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 7 },
-  goalUnitInput: { marginTop: 12 },
+  goalFieldLabel: { ...font.label, marginBottom: 7, marginLeft: space.xs },
+  goalUnitInput: { marginTop: space.md },
   saveButton: {
-    marginTop: 32,
+    marginTop: space.xxl,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     alignItems: 'center',
   },
-  saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  saveButtonText: { color: '#fff', ...font.headline },
   archiveButton: {
-    marginTop: 16,
+    marginTop: space.lg,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     alignItems: 'center',
-    borderWidth: 1,
   },
   deleteButton: {
-    marginTop: 12,
+    marginTop: space.md,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     alignItems: 'center',
-    borderWidth: 1,
   },
 });

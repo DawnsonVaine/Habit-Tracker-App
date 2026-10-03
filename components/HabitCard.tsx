@@ -9,7 +9,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { useTheme } from '../hooks/useTheme';
+import { font, radius, space, useTheme } from '../hooks/useTheme';
 import { Habit } from '../types/habit';
 import { dayCredit, formatProgress, withAlpha } from '../utils/goals';
 
@@ -195,7 +195,7 @@ export function HabitCard({
   badge,
   onLongPress,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
   const isBinary = habit.goalType === 'binary';
   const resting = skipped && !completed;
   const streakText = streak > 0 ? `🔥 ${streak}` : '';
@@ -210,10 +210,19 @@ export function HabitCard({
   }
 
   return (
-    <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.row, card]}>
       <Link href={{ pathname: '/habit/[id]', params: { id: habit.id } }} asChild>
         <Pressable style={styles.info} onLongPress={onLongPress} delayLongPress={220}>
-          <Text style={[styles.emoji, resting && styles.restingEmoji]}>{habit.emoji}</Text>
+          {/* The emoji sits on a soft wash of the habit's own colour. */}
+          <View
+            style={[
+              styles.emojiTile,
+              { backgroundColor: withAlpha(habit.color, 0.13) },
+              resting && styles.restingEmoji,
+            ]}
+          >
+            <Text style={styles.emoji}>{habit.emoji}</Text>
+          </View>
           <View style={{ flex: 1 }}>
             <View style={styles.nameRow}>
               <Text style={[styles.name, styles.nameText, { color: colors.text }]} numberOfLines={1}>
@@ -266,24 +275,29 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    borderRadius: radius.lg,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md + 2,
+    marginBottom: space.sm + 2,
   },
   info: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: space.md,
+  },
+  emojiTile: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emoji: {
-    fontSize: 28,
+    fontSize: 24,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...font.headline,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   // Lets a long name truncate instead of pushing the badge off the card.

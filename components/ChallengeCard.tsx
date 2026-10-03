@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { useTheme } from '../hooks/useTheme';
+import { radius, useTheme } from '../hooks/useTheme';
 import { Challenge, Habit } from '../types/habit';
 import {
   CHALLENGE_LENGTHS,
@@ -64,8 +64,8 @@ function ProgressBar({ ratio, color, trackColor }: { ratio: number; color: strin
 }
 
 export function ChallengeCard({ habit, active, last, onStart, onAbandon }: Props) {
-  const { colors } = useTheme();
-  const cardStyle = [styles.card, { backgroundColor: colors.card, borderColor: colors.border }];
+  const { colors, card } = useTheme();
+  const cardStyle = [styles.card, card];
 
   if (active) {
     const { challenge, result } = active;
@@ -83,7 +83,7 @@ export function ChallengeCard({ habit, active, last, onStart, onAbandon }: Props
           </Text>
         </View>
 
-        <ProgressBar ratio={ratio} color={habit.color} trackColor={colors.border} />
+        <ProgressBar ratio={ratio} color={habit.color} trackColor={colors.fill} />
 
         <Text style={[styles.body, { color: colors.text }]}>
           {kept} of {result.sessionsTotal} sessions kept
@@ -138,8 +138,7 @@ export function ChallengeCard({ habit, active, last, onStart, onAbandon }: Props
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     padding: 16,
     marginBottom: 24,
   },
@@ -162,8 +161,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   giveUp: { fontSize: 13, fontWeight: '600' },
-  track: { height: 10, borderRadius: 5, overflow: 'hidden' },
-  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 5 },
+  track: { height: 8, borderRadius: radius.pill, overflow: 'hidden' },
+  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radius.pill },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   chip: {
     borderWidth: 1.5,

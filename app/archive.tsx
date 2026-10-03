@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../hooks/useTheme';
+import { radius, useTheme } from '../hooks/useTheme';
 import { useHabitStore } from '../store/habitStore';
 
 export default function ArchiveScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
   const habits = useHabitStore((s) => s.habits);
 
   const archivedHabits = useMemo(() => habits.filter((h) => h.archived), [habits]);
@@ -25,7 +25,7 @@ export default function ArchiveScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <Pressable
-              style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[styles.row, card]}
               onPress={() => router.push({ pathname: '/habit/new', params: { id: item.id } })}
             >
               <Text style={styles.emoji}>{item.emoji}</Text>
@@ -47,8 +47,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: radius.lg,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 10,

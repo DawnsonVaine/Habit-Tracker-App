@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useTheme } from '../hooks/useTheme';
+import { font, radius, space, useTheme } from '../hooks/useTheme';
 import { Progression, rankForLevel } from '../utils/progression';
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function LevelCard({ progression, accentColor }: Props) {
-  const { colors } = useTheme();
+  const { colors, card } = useTheme();
   const { level, rank, nextTier, nextTierLevel, xpTotal, xpIntoLevel, xpForLevel, ratio, isMaxLevel } =
     progression;
 
@@ -31,7 +31,7 @@ export function LevelCard({ progression, accentColor }: Props) {
   const fillStyle = useAnimatedStyle(() => ({ width: trackWidth.value * fill.value }));
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.card, card]}>
       <View style={styles.header}>
         <Text style={styles.rankEmoji}>{rank.tier.emoji}</Text>
         <View style={{ flex: 1 }}>
@@ -42,7 +42,7 @@ export function LevelCard({ progression, accentColor }: Props) {
       </View>
 
       <View
-        style={[styles.track, { backgroundColor: colors.border }]}
+        style={[styles.track, { backgroundColor: colors.fill }]}
         onLayout={(e) => {
           trackWidth.value = e.nativeEvent.layout.width;
         }}
@@ -68,19 +68,18 @@ export function LevelCard({ progression, accentColor }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.xl + 4,
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg },
   rankEmoji: { fontSize: 32 },
-  level: { fontSize: 20, fontWeight: '800' },
-  rankName: { fontSize: 13, marginTop: 1 },
-  totalXp: { fontSize: 15, fontWeight: '700' },
+  level: { ...font.title },
+  rankName: { ...font.caption, marginTop: 1 },
+  totalXp: { ...font.label },
   track: {
-    height: 10,
-    borderRadius: 5,
+    height: 8,
+    borderRadius: radius.pill,
     overflow: 'hidden',
   },
   trackFill: {
@@ -88,8 +87,8 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    borderRadius: 5,
+    borderRadius: radius.pill,
   },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  footerText: { fontSize: 11 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.sm + 2 },
+  footerText: { ...font.caption },
 });

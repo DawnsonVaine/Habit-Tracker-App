@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { CelebrationOverlay } from '../components/CelebrationOverlay';
-import { useTheme } from '../hooks/useTheme';
+import { font, useTheme } from '../hooks/useTheme';
 import { useHabitStore } from '../store/habitStore';
 import { challengeLengthLabel, getChallengeProgress } from '../utils/challenges';
 import { syncReminders } from '../utils/notifications';
@@ -107,8 +107,12 @@ export default function RootLayout() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.text,
+          // The header shares the page colour and drops its divider, so detail
+          // screens read as one calm surface rather than a bar stacked on a page.
+          headerStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+          headerTintColor: colors.accent,
+          headerTitleStyle: { ...font.headline, color: colors.text },
           contentStyle: { backgroundColor: colors.background },
           headerBackButtonDisplayMode: 'minimal',
         }}
