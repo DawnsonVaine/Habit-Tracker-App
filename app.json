@@ -35,6 +35,12 @@
       ],
       "expo-sharing",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8d2d54c2-c7bc-4d37-a6a2-6d5c9e68cabd"
+      }
+    },
+    "owner": "dawnsonvaine"
   }
 }
