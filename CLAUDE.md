@@ -14,7 +14,7 @@ A local-only iPhone habit tracker built with Expo. The owner (Dawnson) works on 
 
 ## Stack
 
-Expo SDK 57, React Native 0.86, React 19.2, Expo Router (file-based, `app/`), TypeScript, Zustand `persist` with AsyncStorage, Reanimated 4, react-native-gesture-handler, react-native-reorderable-list (drag-to-reorder), expo-notifications (local reminders only), expo-file-system's new `File`/`Paths` API (backup/restore), expo-symbols (SF Symbols tab icons), Vitest.
+Expo SDK 58, React Native 0.88, React 19.3, Expo Router (file-based, `app/`), TypeScript, Zustand `persist` with AsyncStorage, Reanimated 4 (with react-native-worklets), react-native-gesture-handler 3 (react-native-reorderable-list still uses its deprecated `Gesture` builder API), react-native-reorderable-list (drag-to-reorder), expo-notifications (local reminders only), expo-file-system's new `File`/`Paths` API (backup/restore), expo-symbols (SF Symbols tab icons), Vitest.
 
 ## Layout
 
